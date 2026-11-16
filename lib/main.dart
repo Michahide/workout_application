@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
+import 'core/sync/sync_engine.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,8 @@ class WorkoutTrackerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Eagerly initialize SyncController for startup & connectivity auto-sync
+    ref.watch(syncControllerProvider);
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

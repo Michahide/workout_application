@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
 import '../../../core/database/tables.dart';
+import '../../../core/sync/sync_engine.dart';
 import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../../exercise_library/presentation/exercise_media_gallery.dart';
@@ -106,6 +107,12 @@ class ActiveWorkoutScreen extends ConsumerWidget {
             sessionId: details.session.id,
             sessionNotes: notes,
           );
+      // Auto-Sync Trigger #3: Non-blocking background sync right after finishing workout
+      unawaited(
+        ref
+            .read(syncControllerProvider.notifier)
+            .triggerSyncNow(silentIfUnconfigured: true),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
