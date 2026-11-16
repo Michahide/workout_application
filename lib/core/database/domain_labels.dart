@@ -91,10 +91,59 @@ extension ExerciseTypeLabelX on ExerciseType {
       };
 }
 
+extension SetTypeLabelX on SetType {
+  String get label => switch (this) {
+        SetType.warmup => 'Warm-up',
+        SetType.normal => 'Working Set',
+        SetType.dropset => 'Drop Set',
+        SetType.failure => 'Failure Set',
+      };
+
+  String get shortBadge => switch (this) {
+        SetType.warmup => 'W',
+        SetType.normal => 'N',
+        SetType.dropset => 'D',
+        SetType.failure => 'F',
+      };
+}
+
+extension AssistanceTypeLabelX on AssistanceType {
+  String get label => switch (this) {
+        AssistanceType.solo => 'Solo',
+        AssistanceType.spotted_no_touch => 'Spotted',
+        AssistanceType.assisted => 'Assisted',
+      };
+
+  String get description => switch (this) {
+        AssistanceType.solo => '100% angkatan sendiri tanpa spotter',
+        AssistanceType.spotted_no_touch =>
+          'Dijaga spotter untuk keamanan (tanpa bantuan angkat)',
+        AssistanceType.assisted =>
+          'Dibantu angkat secara fisik oleh spotter',
+      };
+}
+
 String formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';
   final kb = bytes / 1024;
   if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
   final mb = kb / 1024;
   return '${mb.toStringAsFixed(2)} MB';
+}
+
+String formatRestDuration(int totalSeconds) {
+  final isNegative = totalSeconds < 0;
+  final absSeconds = totalSeconds.abs();
+  final mins = absSeconds ~/ 60;
+  final secs = absSeconds % 60;
+  final formatted = '$mins:${secs.toString().padLeft(2, '0')}';
+  return isNegative ? '+$formatted' : formatted;
+}
+
+String formatCompactDuration(int totalSeconds) {
+  final mins = totalSeconds ~/ 60;
+  final secs = totalSeconds % 60;
+  if (mins == 0) return '${secs}s';
+  if (secs == 0) return '${mins}m';
+  return '${mins}m ${secs}s';
 }
