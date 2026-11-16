@@ -7,7 +7,13 @@ import 'package:uuid/uuid.dart';
 enum SyncStatus {
   synced,
   pending_push,
-  pending_delete,
+  pending_delete;
+
+  /// CamelCase alias for [SyncStatus.pending_push].
+  static const SyncStatus pendingPush = SyncStatus.pending_push;
+
+  /// CamelCase alias for [SyncStatus.pending_delete].
+  static const SyncStatus pendingDelete = SyncStatus.pending_delete;
 }
 
 /// Base Drift table mixin enforcing Offline-First & Cloud-Sync rules:

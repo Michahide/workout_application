@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Digunakan untuk mengambil foto dan video form/setup gerakan latihan.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Digunakan untuk memilih foto dan video form/setup gerakan latihan dari galeri.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Digunakan saat merekam video catatan gerakan latihan.</string>
 </dict>
 </plist>
