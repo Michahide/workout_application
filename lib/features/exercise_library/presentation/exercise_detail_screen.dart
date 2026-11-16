@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
+import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
 import '../../gym_locations/data/gym_location_repository.dart';
 import '../../gym_locations/presentation/gym_locations_providers.dart';
 import '../../gym_locations/presentation/gym_machine_form_sheet.dart';
@@ -86,6 +87,14 @@ class ExerciseDetailScreen extends ConsumerWidget {
         title: Text(exerciseAsync.asData?.value?.name ?? 'Detail Gerakan'),
         actions: [
           if (exerciseAsync.asData?.value != null) ...[
+            IconButton(
+              tooltip: 'Lihat Progress & PR',
+              onPressed: () => ExerciseAnalyticsSheet.show(
+                context,
+                exerciseId: exerciseId,
+              ),
+              icon: const Icon(Icons.insights_rounded),
+            ),
             IconButton(
               tooltip: 'Edit Gerakan',
               onPressed: () => _openEditExerciseSheet(

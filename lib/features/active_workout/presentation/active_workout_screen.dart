@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
 import '../../../core/database/tables.dart';
+import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../../exercise_library/presentation/exercise_media_gallery.dart';
 import '../../workout_plans/presentation/workout_plans_providers.dart';
@@ -607,6 +608,16 @@ class _ActiveExerciseCard extends ConsumerWidget {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Lihat Grafik Progress & PR Alat Ini',
+                  onPressed: () => ExerciseAnalyticsSheet.show(
+                    context,
+                    exerciseId: exercise.id,
+                    gymMachineId: machine?.id,
+                  ),
+                  icon: const Icon(Icons.insights_rounded, size: 20),
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,

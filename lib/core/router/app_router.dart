@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/active_workout/data/active_workout_repository.dart';
 import '../../features/active_workout/domain/rest_timer_controller.dart';
 import '../../features/active_workout/presentation/active_workout_screen.dart';
+import '../../features/analytics/presentation/screens/analytics_screen.dart';
 import '../../features/exercise_library/presentation/exercise_detail_screen.dart';
 import '../../features/exercise_library/presentation/exercise_library_screen.dart';
 import '../../features/gym_locations/presentation/gym_location_detail_screen.dart';
@@ -82,16 +83,16 @@ GoRouter appRouter(Ref ref) {
               ),
             ],
           ),
-          // 4: Analytics (Placeholder for Stage 4)
+          // 4: Analytics & History
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: '/analytics',
-                builder: (context, state) => const _StagePlaceholderScreen(
-                  icon: Icons.insights_rounded,
-                  title: 'Analytics & PR Engine',
-                  subtitle:
-                      'Grafik progres 1RM, volume per alat gym, dan tren istirahat akan hadir di Tahap 4.',
+                builder: (context, state) => AnalyticsScreen(
+                  initialExerciseId:
+                      state.uri.queryParameters['exerciseId'],
+                  initialGymMachineId:
+                      state.uri.queryParameters['gymMachineId'],
                 ),
               ),
             ],
@@ -237,56 +238,6 @@ class _ActiveWorkoutMiniPlayerBanner extends ConsumerWidget {
                   visualDensity: VisualDensity.compact,
                 ),
                 child: const Text('Buka Sesi'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StagePlaceholderScreen extends StatelessWidget {
-  const _StagePlaceholderScreen({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
