@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../core/database/domain_labels.dart';
 import '../../../core/database/tables.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../data/active_workout_repository.dart';
@@ -24,6 +25,7 @@ class RestTimerState {
     this.targetRestSeconds = 0,
     this.targetEndTime,
     this.exerciseName,
+    this.activeSessionExerciseId,
     this.nextSupersetExerciseId,
     this.nextSupersetBanner,
     this.tick = 0,
@@ -34,6 +36,7 @@ class RestTimerState {
   final int targetRestSeconds;
   final DateTime? targetEndTime;
   final String? exerciseName;
+  final String? activeSessionExerciseId;
 
   /// When the user completes Set 1 of Superset A1, points to Exercise A2 so UI
   /// can highlight/scroll to A2 before starting the full round rest.
@@ -72,6 +75,7 @@ class RestTimerState {
     int? targetRestSeconds,
     DateTime? Function()? targetEndTime,
     String? Function()? exerciseName,
+    String? Function()? activeSessionExerciseId,
     String? Function()? nextSupersetExerciseId,
     String? Function()? nextSupersetBanner,
     int? tick,
@@ -85,6 +89,9 @@ class RestTimerState {
       targetEndTime:
           targetEndTime != null ? targetEndTime() : this.targetEndTime,
       exerciseName: exerciseName != null ? exerciseName() : this.exerciseName,
+      activeSessionExerciseId: activeSessionExerciseId != null
+          ? activeSessionExerciseId()
+          : this.activeSessionExerciseId,
       nextSupersetExerciseId: nextSupersetExerciseId != null
           ? nextSupersetExerciseId()
           : this.nextSupersetExerciseId,
@@ -98,19 +105,44 @@ class RestTimerState {
 
 @Riverpod(keepAlive: true)
 class RestTimerController extends _$RestTimerController {
-  static const int _kRestNotificationId = 9001;
+  /// Notification ID for the sound/vibration alarm when rest timer reaches 0:00.
+  static const int _kRestAlarmNotificationId = 9001;
+
+  /// Notification ID for the live ongoing workout & rest tracker in the status bar.
+  static const int _kOngoingWorkoutNotificationId = 9002;
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
   bool _notificationsInitialized = false;
+  bool _permissionRequested = false;
   Timer? _uiRefreshTimer;
+  ActiveWorkoutSessionDetails? _latestSessionDetails;
 
   @override
   RestTimerState build() {
     ref.onDispose(() {
       _uiRefreshTimer?.cancel();
     });
+
     _ensureNotificationsInitialized();
+
+    // Reactively track the active workout session to keep the ongoing status bar
+    // notification updated with current workout, exercise, set number, and rest time.
+    ref.listen<AsyncValue<ActiveWorkoutSessionDetails?>>(
+      activeWorkoutSessionStreamProvider,
+      (previous, next) {
+        if (!next.hasValue) return;
+        final details = next.value;
+        _latestSessionDetails = details;
+        if (details == null) {
+          unawaited(_cancelOngoingWorkoutNotification());
+        } else {
+          unawaited(_refreshOngoingWorkoutNotification());
+        }
+      },
+      fireImmediately: true,
+    );
+
     return const RestTimerState();
   }
 
@@ -120,7 +152,11 @@ class RestTimerController extends _$RestTimerController {
       tz_data.initializeTimeZones();
       const initializationSettings = InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        ),
         macOS: DarwinInitializationSettings(),
         linux: LinuxInitializationSettings(
           defaultActionName: 'Open notification',
@@ -128,8 +164,22 @@ class RestTimerController extends _$RestTimerController {
       );
       await _notificationsPlugin.initialize(settings: initializationSettings);
       _notificationsInitialized = true;
+      await _requestPermissionsIfNeeded();
     } catch (_) {
       // Gracefully ignore in environments where notifications are unsupported.
+    }
+  }
+
+  Future<void> _requestPermissionsIfNeeded() async {
+    if (_permissionRequested) return;
+    _permissionRequested = true;
+    try {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    } catch (_) {
+      // Ignore permission request errors on unsupported platforms.
     }
   }
 
@@ -138,6 +188,9 @@ class RestTimerController extends _$RestTimerController {
     _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (state.isRunning || state.lastSetCompletedAt != null) {
         state = state.copyWith(tick: state.tick + 1);
+        if (state.isRunning || state.nextSupersetBanner != null) {
+          unawaited(_refreshOngoingWorkoutNotification());
+        }
       }
     });
   }
@@ -155,16 +208,6 @@ class RestTimerController extends _$RestTimerController {
   }
 
   /// Called when the user marks a set as completed (`isCompleted == true`).
-  ///
-  /// 1. Records `lastSetCompletedAt = DateTime.now().toUtc()`.
-  /// 2. Checks **Superset Rules**: if the exercise belongs to a `supersetGroupId`
-  ///    and another exercise in the same superset still has its corresponding set
-  ///    incomplete, sets `nextSupersetExerciseId` and `nextSupersetBanner` to
-  ///    guide the lifter to the next superset movement before starting the full
-  ///    round rest timer.
-  /// 3. Resolves `targetRestSeconds` from `AppSettings` (split warm-up `LARGE` vs
-  ///    `SMALL`, global warm-up, or working set rest) and schedules a local
-  ///    notification at `targetEndTime`.
   Future<int> onSetCompleted({
     required ActiveWorkoutSessionDetails sessionDetails,
     required ActiveSessionExerciseBundle currentExerciseBundle,
@@ -172,6 +215,7 @@ class RestTimerController extends _$RestTimerController {
     required SetType completedSetType,
     int? customSetTargetRestSeconds,
   }) async {
+    _latestSessionDetails = sessionDetails;
     final now = DateTime.now().toUtc();
     final settings = await ref.read(appSettingsRepositoryProvider).getSettings();
 
@@ -205,13 +249,14 @@ class RestTimerController extends _$RestTimerController {
               .where((s) => s.setNumber == completedSetNumber)
               .firstOrNull;
           if (matchingSet != null && !matchingSet.isCompleted) {
-            await _cancelScheduledNotification();
+            await _cancelScheduledRestAlarm();
             state = RestTimerState(
               isRunning: false,
               lastSetCompletedAt: now,
               targetRestSeconds: resolvedTargetRest,
               targetEndTime: null,
               exerciseName: candidate.exercise.name,
+              activeSessionExerciseId: candidate.sessionExercise.id,
               nextSupersetExerciseId: candidate.sessionExercise.id,
               nextSupersetBanner:
                   'Lanjut Superset ${candidate.supersetBadge ?? ""}: '
@@ -219,6 +264,7 @@ class RestTimerController extends _$RestTimerController {
               tick: state.tick + 1,
             );
             _startUiRefreshTicker();
+            await _refreshOngoingWorkoutNotification();
             return resolvedTargetRest;
           }
         }
@@ -233,6 +279,7 @@ class RestTimerController extends _$RestTimerController {
       targetRestSeconds: resolvedTargetRest,
       targetEndTime: endTime,
       exerciseName: currentExerciseBundle.exercise.name,
+      activeSessionExerciseId: currentExerciseBundle.sessionExercise.id,
       nextSupersetExerciseId: null,
       nextSupersetBanner: null,
       tick: state.tick + 1,
@@ -241,8 +288,12 @@ class RestTimerController extends _$RestTimerController {
     _startUiRefreshTicker();
     await _scheduleRestFinishedNotification(
       targetEndTime: endTime,
-      exerciseName: currentExerciseBundle.exercise.name,
+      targetRestSeconds: resolvedTargetRest,
+      sessionDetails: sessionDetails,
+      currentExerciseBundle: currentExerciseBundle,
+      completedSetNumber: completedSetNumber,
     );
+    await _refreshOngoingWorkoutNotification();
 
     return resolvedTargetRest;
   }
@@ -264,18 +315,21 @@ class RestTimerController extends _$RestTimerController {
     if (updatedEnd.isAfter(DateTime.now().toUtc())) {
       await _scheduleRestFinishedNotification(
         targetEndTime: updatedEnd,
-        exerciseName: state.exerciseName ?? 'Latihan',
+        targetRestSeconds: updatedTarget,
+        sessionDetails: _latestSessionDetails,
+        fallbackExerciseName: state.exerciseName ?? 'Latihan',
       );
     } else {
-      await _cancelScheduledNotification();
+      await _cancelScheduledRestAlarm();
     }
+    await _refreshOngoingWorkoutNotification();
   }
 
-  /// Dismisses the countdown bar and cancels any pending notification while
+  /// Dismisses the countdown bar and cancels any pending rest alarm while
   /// preserving `lastSetCompletedAt` so `actualRestSeconds` is still recorded
   /// when Set N+1 is completed.
   Future<void> skipTimer() async {
-    await _cancelScheduledNotification();
+    await _cancelScheduledRestAlarm();
     state = state.copyWith(
       isRunning: false,
       targetEndTime: () => null,
@@ -283,46 +337,331 @@ class RestTimerController extends _$RestTimerController {
       nextSupersetExerciseId: () => null,
       tick: state.tick + 1,
     );
+    await _refreshOngoingWorkoutNotification();
   }
 
-  /// Resets the timer completely when a workout session finishes or is discarded.
+  /// Resets the timer completely and clears all notifications when a workout
+  /// session finishes or is discarded.
   Future<void> resetAll() async {
     _uiRefreshTimer?.cancel();
-    await _cancelScheduledNotification();
+    _latestSessionDetails = null;
+    await _cancelScheduledRestAlarm();
+    await _cancelOngoingWorkoutNotification();
     state = const RestTimerState();
+  }
+
+  // ---------------------------------------------------------------------------
+  // LIVE ONGOING WORKOUT & REST TRACKER NOTIFICATION
+  // ---------------------------------------------------------------------------
+
+  /// Resolves the active/next exercise and set number in [details] so the
+  /// notification always displays which exercise, machine, and set the user is on.
+  ({
+    ActiveSessionExerciseBundle? exerciseBundle,
+    int currentSetNumber,
+    int totalSetsForExercise,
+    SetType setType,
+    double? targetWeight,
+    int? targetReps,
+    bool allSessionSetsCompleted,
+  }) _resolveCurrentExerciseAndSet(ActiveWorkoutSessionDetails details) {
+    if (details.exercises.isEmpty) {
+      return (
+        exerciseBundle: null,
+        currentSetNumber: 1,
+        totalSetsForExercise: 0,
+        setType: SetType.normal,
+        targetWeight: null,
+        targetReps: null,
+        allSessionSetsCompleted: false,
+      );
+    }
+
+    // 1. If a superset next exercise or active exercise is focused, check it first
+    final preferredId =
+        state.nextSupersetExerciseId ?? state.activeSessionExerciseId;
+    if (preferredId != null) {
+      final preferredBundle = details.exercises
+          .where((e) => e.sessionExercise.id == preferredId)
+          .firstOrNull;
+      if (preferredBundle != null) {
+        final nextIncomplete = preferredBundle.sets
+            .where((s) => !s.isCompleted)
+            .firstOrNull;
+        if (nextIncomplete != null) {
+          return (
+            exerciseBundle: preferredBundle,
+            currentSetNumber: nextIncomplete.setNumber,
+            totalSetsForExercise: preferredBundle.sets.length,
+            setType: nextIncomplete.setType,
+            targetWeight: nextIncomplete.weight,
+            targetReps: nextIncomplete.reps,
+            allSessionSetsCompleted: false,
+          );
+        }
+      }
+    }
+
+    // 2. Otherwise find the first exercise in the session with an incomplete set
+    for (final bundle in details.exercises) {
+      final nextIncomplete =
+          bundle.sets.where((s) => !s.isCompleted).firstOrNull;
+      if (nextIncomplete != null) {
+        return (
+          exerciseBundle: bundle,
+          currentSetNumber: nextIncomplete.setNumber,
+          totalSetsForExercise: bundle.sets.length,
+          setType: nextIncomplete.setType,
+          targetWeight: nextIncomplete.weight,
+          targetReps: nextIncomplete.reps,
+          allSessionSetsCompleted: false,
+        );
+      }
+    }
+
+    // 3. All sets in the session are completed
+    final lastBundle = details.exercises.last;
+    final lastSet = lastBundle.sets.lastOrNull;
+    return (
+      exerciseBundle: lastBundle,
+      currentSetNumber: lastSet?.setNumber ?? lastBundle.sets.length,
+      totalSetsForExercise: lastBundle.sets.length,
+      setType: lastSet?.setType ?? SetType.normal,
+      targetWeight: lastSet?.weight,
+      targetReps: lastSet?.reps,
+      allSessionSetsCompleted: true,
+    );
+  }
+
+  /// Posts or updates the ongoing status-bar notification showing:
+  /// - Which Workout & Gym is active
+  /// - Which Exercise, Machine Brand, and Set Number (`Set X dari Y`) the user is on
+  /// - Live Rest Timer countdown (`Rest mm:ss / Target mm:ss`) + progress bar when resting
+  Future<void> _refreshOngoingWorkoutNotification() async {
+    final details = _latestSessionDetails;
+    if (details == null) {
+      await _cancelOngoingWorkoutNotification();
+      return;
+    }
+
+    await _ensureNotificationsInitialized();
+    await _requestPermissionsIfNeeded();
+
+    final workoutTitle = details.workoutPlan?.name ?? 'Empty Workout';
+    final gymName = details.gymLocation?.name ?? 'Gym';
+    final completedSets = details.completedSetsCount;
+    final totalSets = details.totalSetsCount;
+
+    final current = _resolveCurrentExerciseAndSet(details);
+    final bundle = current.exerciseBundle;
+    final exName = bundle?.exercise.name ?? 'Belum ada gerakan';
+    final machineBrand = bundle?.selectedMachine?.brandName;
+    final unit = bundle?.selectedMachine?.weightUnit ?? WeightUnit.KG;
+    final machineTag =
+        (machineBrand != null && machineBrand.isNotEmpty)
+            ? ' ($machineBrand)'
+            : '';
+
+    final setLabel = current.setType == SetType.warmup
+        ? 'Warm-up Set #${current.currentSetNumber}/${current.totalSetsForExercise}'
+        : current.setType == SetType.dropset
+            ? 'Drop Set #${current.currentSetNumber}/${current.totalSetsForExercise}'
+            : current.setType == SetType.failure
+                ? 'Failure Set #${current.currentSetNumber}/${current.totalSetsForExercise}'
+                : 'Set #${current.currentSetNumber}/${current.totalSetsForExercise}';
+
+    String loadHint = '';
+    if (current.targetWeight != null && current.targetReps != null) {
+      final w = current.targetWeight!;
+      final wStr = w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+      loadHint = ' • $wStr${unit.label.toLowerCase()} × ${current.targetReps}';
+    } else if (current.targetReps != null) {
+      loadHint = ' • ${current.targetReps} reps';
+    }
+
+    late final String notifTitle;
+    late final String notifBody;
+    late final AndroidNotificationDetails androidDetails;
+
+    if (state.isRunning && state.targetEndTime != null) {
+      // CASE 1: Smart Rest Timer is actively running
+      final remaining = state.remainingSeconds;
+      final elapsed = state.elapsedSeconds;
+      final target = state.targetRestSeconds;
+      final isOvertime = remaining < 0;
+
+      notifTitle = isOvertime
+          ? '🔥 Overtime +${formatRestDuration(remaining.abs())} (Rest: ${formatRestDuration(elapsed)})'
+          : '⏱ Rest: ${formatRestDuration(remaining)} / ${formatRestDuration(target)}';
+
+      notifBody = current.allSessionSetsCompleted
+          ? '$workoutTitle ($gymName) • Semua $totalSets set selesai!'
+          : 'Berikutnya: $setLabel — $exName$machineTag$loadHint ($completedSets/$totalSets set)';
+
+      androidDetails = AndroidNotificationDetails(
+        'active_workout_tracker_channel',
+        'Active Workout & Rest Tracker',
+        channelDescription:
+            'Menampilkan progres set latihan aktif dan hitung mundur waktu istirahat',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        silent: true,
+        playSound: false,
+        enableVibration: false,
+        showWhen: true,
+        when: isOvertime
+            ? state.lastSetCompletedAt?.millisecondsSinceEpoch
+            : state.targetEndTime?.millisecondsSinceEpoch,
+        usesChronometer: true,
+        chronometerCountDown: !isOvertime,
+        showProgress: true,
+        maxProgress: target > 0 ? target : 1,
+        progress: elapsed.clamp(0, target > 0 ? target : 1),
+        subText: '$workoutTitle • $gymName',
+        styleInformation: BigTextStyleInformation(
+          notifBody,
+          contentTitle: notifTitle,
+          summaryText: '$workoutTitle • $completedSets/$totalSets Set',
+        ),
+      );
+    } else if (state.nextSupersetBanner != null) {
+      // CASE 2: Superset Transition between movements
+      notifTitle = '⚡ ${state.nextSupersetBanner!}';
+      notifBody =
+          '$workoutTitle ($gymName) • Transisi: ${formatRestDuration(state.elapsedSeconds)} • Total: $completedSets/$totalSets set';
+
+      androidDetails = AndroidNotificationDetails(
+        'active_workout_tracker_channel',
+        'Active Workout & Rest Tracker',
+        channelDescription:
+            'Menampilkan progres set latihan aktif dan hitung mundur waktu istirahat',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        silent: true,
+        playSound: false,
+        enableVibration: false,
+        showWhen: true,
+        when: state.lastSetCompletedAt?.millisecondsSinceEpoch,
+        usesChronometer: true,
+        chronometerCountDown: false,
+        subText: '$workoutTitle • Superset',
+        styleInformation: BigTextStyleInformation(
+          notifBody,
+          contentTitle: notifTitle,
+        ),
+      );
+    } else {
+      // CASE 3: Actively lifting / working on current set
+      notifTitle = bundle == null
+          ? '🏋️ $workoutTitle ($gymName)'
+          : current.allSessionSetsCompleted
+              ? '✅ Semua $totalSets Set Selesai! ($workoutTitle)'
+              : '🏋️ $setLabel • $exName$machineTag';
+
+      notifBody = bundle == null
+          ? 'Sesi latihan aktif — Tambahkan gerakan untuk mulai mencatat set.'
+          : current.allSessionSetsCompleted
+              ? '$workoutTitle ($gymName) • Ketuk untuk menyelesaikan sesi latihan.'
+              : 'Workout: $workoutTitle ($gymName)$loadHint • Selesai: $completedSets/$totalSets set';
+
+      androidDetails = AndroidNotificationDetails(
+        'active_workout_tracker_channel',
+        'Active Workout & Rest Tracker',
+        channelDescription:
+            'Menampilkan progres set latihan aktif dan hitung mundur waktu istirahat',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        silent: true,
+        playSound: false,
+        enableVibration: false,
+        showWhen: true,
+        when: details.session.startedAt.millisecondsSinceEpoch,
+        usesChronometer: true,
+        chronometerCountDown: false,
+        subText: '$workoutTitle • $completedSets/$totalSets Set',
+        styleInformation: BigTextStyleInformation(
+          notifBody,
+          contentTitle: notifTitle,
+          summaryText: '$workoutTitle • $gymName',
+        ),
+      );
+    }
+
+    try {
+      await _notificationsPlugin.show(
+        id: _kOngoingWorkoutNotificationId,
+        title: notifTitle,
+        body: notifBody,
+        notificationDetails: NotificationDetails(
+          android: androidDetails,
+          iOS: const DarwinNotificationDetails(
+            presentAlert: false,
+            presentSound: false,
+            presentBanner: false,
+            presentList: true,
+          ),
+        ),
+      );
+    } catch (_) {
+      // Ignore notification errors on unsupported platforms.
+    }
   }
 
   Future<void> _scheduleRestFinishedNotification({
     required DateTime targetEndTime,
-    required String exerciseName,
+    required int targetRestSeconds,
+    ActiveWorkoutSessionDetails? sessionDetails,
+    ActiveSessionExerciseBundle? currentExerciseBundle,
+    int? completedSetNumber,
+    String? fallbackExerciseName,
   }) async {
     await _ensureNotificationsInitialized();
-    await _cancelScheduledNotification();
+    await _cancelScheduledRestAlarm();
 
     if (!targetEndTime.isAfter(DateTime.now().toUtc())) return;
 
+    final workoutTitle = sessionDetails?.workoutPlan?.name ?? 'Workout';
+    final exName =
+        currentExerciseBundle?.exercise.name ?? fallbackExerciseName ?? 'Latihan';
+    final brand = currentExerciseBundle?.selectedMachine?.brandName;
+    final machinePart = (brand != null && brand.isNotEmpty) ? ' ($brand)' : '';
+    final nextSetNum =
+        completedSetNumber != null ? completedSetNumber + 1 : null;
+    final nextSetText = nextSetNum != null ? 'Set #$nextSetNum' : 'set berikutnya';
+
     try {
       final scheduledDate = tz.TZDateTime.from(targetEndTime, tz.local);
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: AndroidNotificationDetails(
           'rest_timer_channel',
-          'Smart Rest Timer',
-          channelDescription: 'Notifikasi saat waktu istirahat antar set selesai',
+          'Smart Rest Timer Alarm',
+          channelDescription: 'Alarm saat waktu istirahat antar set selesai',
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
           enableVibration: true,
+          subText: workoutTitle,
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentSound: true,
         ),
       );
 
       await _notificationsPlugin.zonedSchedule(
-        id: _kRestNotificationId,
-        title: 'Waktu Istirahat Selesai! 💪',
-        body: 'Saatnya mulai set berikutnya untuk $exerciseName.',
+        id: _kRestAlarmNotificationId,
+        title:
+            'Rest ${formatCompactDuration(targetRestSeconds)} Selesai! 💪',
+        body: 'Saatnya mulai $nextSetText pada $exName$machinePart ($workoutTitle).',
         scheduledDate: scheduledDate,
         notificationDetails: details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -332,9 +671,17 @@ class RestTimerController extends _$RestTimerController {
     }
   }
 
-  Future<void> _cancelScheduledNotification() async {
+  Future<void> _cancelScheduledRestAlarm() async {
     try {
-      await _notificationsPlugin.cancel(id: _kRestNotificationId);
+      await _notificationsPlugin.cancel(id: _kRestAlarmNotificationId);
+    } catch (_) {
+      // Ignore cancellation errors on unsupported platforms.
+    }
+  }
+
+  Future<void> _cancelOngoingWorkoutNotification() async {
+    try {
+      await _notificationsPlugin.cancel(id: _kOngoingWorkoutNotificationId);
     } catch (_) {
       // Ignore cancellation errors on unsupported platforms.
     }
