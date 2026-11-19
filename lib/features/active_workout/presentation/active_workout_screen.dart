@@ -12,6 +12,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../../exercise_library/presentation/exercise_media_gallery.dart';
+import '../../gym_locations/presentation/machine_thumbnail_avatar.dart';
 import '../../workout_plans/presentation/workout_plans_providers.dart';
 import '../data/active_workout_repository.dart';
 import '../domain/rest_timer_controller.dart';
@@ -659,76 +660,98 @@ class _ActiveExerciseCard extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
 
-            // Machine Selector / Quick Register Bar + Pinned Notes
+            // Machine Selector / Quick Register Bar + Photo Preview + Pinned Notes
             InkWell(
               onTap: () => _openMachineSelectorOrQuickRegister(context),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHighest.withValues(
                     alpha: 0.7,
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          machine != null
-                              ? Icons.precision_manufacturing_rounded
-                              : Icons.add_circle_outline_rounded,
-                          size: 16,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
+                    MachineThumbnailAvatar(
+                      exerciseId: exercise.id,
+                      gymMachineId: machine?.id,
+                      size: 52,
+                      onTap: () => _openMediaSheet(context),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  machine != null
+                                      ? 'Alat: ${machine.brandName ?? exercise.equipmentCategory.label}'
+                                      : 'Pilih / Quick Register Alat di Gym Ini',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  weightUnit.label,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: colorScheme.onPrimaryContainer,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.swap_horiz_rounded, size: 18),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
                             machine != null
-                                ? 'Alat: ${machine.brandName ?? exercise.equipmentCategory.label}'
-                                : 'Belum ada mesin terdaftar di gym ini — Ketuk untuk Quick Register',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            weightUnit.label,
-                            style: Theme.of(context).textTheme.labelSmall
+                                ? '📍 ${sessionDetails.gymLocation?.name ?? "Gym Ini"} • Ketuk foto untuk lihat/tambah media alat'
+                                : 'Ketuk untuk memilih merk mesin atau mendaftarkan alat baru',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
                                 ?.copyWith(
-                                  color: colorScheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.swap_horiz_rounded, size: 16),
-                      ],
-                    ),
-                    if (machine?.pinnedNotes != null &&
-                        machine!.pinnedNotes!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '📌 ${machine.pinnedNotes}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
+                          if (machine?.pinnedNotes != null &&
+                              machine!.pinnedNotes!.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              '📌 ${machine.pinnedNotes}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -1699,23 +1722,69 @@ class _QuickMachineSelectorSheetState
               ...available.map((m) {
                 final isSelected = m.id == selectedId;
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 6),
+                  margin: const EdgeInsets.only(bottom: 8),
                   color: isSelected
                       ? Theme.of(context).colorScheme.primaryContainer
                       : null,
-                  child: ListTile(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () => _selectExistingMachine(m.id),
-                    title: Text(
-                      m.brandName ??
-                          widget.bundle.exercise.equipmentCategory.label,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: m.pinnedNotes != null
-                        ? Text('📌 ${m.pinnedNotes}')
-                        : null,
-                    trailing: Chip(
-                      label: Text(m.weightUnit.label),
-                      visualDensity: VisualDensity.compact,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(
+                        children: [
+                          MachineThumbnailAvatar(
+                            exerciseId: widget.bundle.exercise.id,
+                            gymMachineId: m.id,
+                            size: 58,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m.brandName ??
+                                      widget.bundle.exercise.equipmentCategory
+                                          .label,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '📍 $gymName • ${m.weightUnit.label}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                                if (m.pinnedNotes != null &&
+                                    m.pinnedNotes!.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '📌 ${m.pinnedNotes}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(
+                              Icons.check_circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 );

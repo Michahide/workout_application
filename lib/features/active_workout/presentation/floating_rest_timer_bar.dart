@@ -46,13 +46,16 @@ class FloatingRestTimerBar extends ConsumerWidget {
                     children: [
                       Text(
                         timerState.nextSupersetBanner!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onTertiaryContainer,
                               fontWeight: FontWeight.bold,
                             ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
-                        'Waktu transisi berjalan: ${formatRestDuration(timerState.elapsedSeconds)}',
+                        'Transisi: ${formatRestDuration(timerState.elapsedSeconds)}',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: colorScheme.onTertiaryContainer,
                             ),
@@ -111,56 +114,34 @@ class FloatingRestTimerBar extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              isOvertime
-                                  ? 'OVERTIME ${formatRestDuration(remaining)}'
-                                  : 'Rest ${formatRestDuration(remaining)}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
+                        Text(
+                          isOvertime
+                              ? 'OVERTIME ${formatRestDuration(remaining)}'
+                              : 'Rest ${formatRestDuration(remaining)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
                                     color: barTextColor,
                                     fontWeight: FontWeight.bold,
                                   ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black12,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Elapsed: ${formatRestDuration(elapsed)} / ${formatRestDuration(timerState.targetRestSeconds)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: barTextColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
                         ),
-                        if (timerState.exerciseName != null)
-                          Text(
-                            timerState.exerciseName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
-                                ?.copyWith(color: barTextColor),
-                          ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Elapsed: ${formatRestDuration(elapsed)} / Target: ${formatRestDuration(timerState.targetRestSeconds)}'
+                          '${timerState.exerciseName != null ? " • ${timerState.exerciseName!}" : ""}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: barTextColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 6),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     tooltip: '-15 detik',

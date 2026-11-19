@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/syncable_table_mixin.dart';
+import '../../../core/database/table_updates_watcher.dart';
 import '../../../core/database/tables.dart';
 import '../domain/workout_calculator.dart';
 
@@ -281,22 +282,22 @@ class AnalyticsRepository {
     return row?.readTable(_db.workoutSessionExercises).gymMachineId;
   }
 
-  /// Reactive stream trigger whenever sessions, session exercises, or sets change.
-  Stream<void> _watchAnalyticsTablesTrigger() {
-    final sessionsStream = (_db.select(_db.workoutSessions)
-          ..where((tbl) => tbl.deletedAt.isNull()))
-        .watch();
-    final setsStream = (_db.select(_db.workoutSets)
-          ..where((tbl) => tbl.deletedAt.isNull()))
-        .watch();
-
-    return sessionsStream.asyncExpand((_) => setsStream.map((_) {}));
-  }
+  List<TableInfo<Table, dynamic>> get _analyticsWatchedTables => [
+        _db.workoutSessions,
+        _db.workoutSessionExercises,
+        _db.workoutSets,
+        _db.gymMachines,
+        _db.gymLocations,
+        _db.exercises,
+        _db.workoutPlans,
+      ];
 
   /// Watches the all-time Personal Record summary for [filter].
   Stream<ExercisePRSummary?> watchExercisePRSummary(AnalyticsFilter filter) {
-    return _watchAnalyticsTablesTrigger().asyncMap(
-      (_) => _computeExercisePRSummary(filter),
+    return watchWithTableUpdates<ExercisePRSummary?>(
+      db: _db,
+      tables: _analyticsWatchedTables,
+      load: () => _computeExercisePRSummary(filter),
     );
   }
 
@@ -304,16 +305,20 @@ class AnalyticsRepository {
   Stream<List<SessionExerciseProgressionPoint>> watchExerciseProgressionSeries(
     AnalyticsFilter filter,
   ) {
-    return _watchAnalyticsTablesTrigger().asyncMap(
-      (_) => _computeProgressionSeries(filter),
+    return watchWithTableUpdates<List<SessionExerciseProgressionPoint>>(
+      db: _db,
+      tables: _analyticsWatchedTables,
+      load: () => _computeProgressionSeries(filter),
     );
   }
 
   /// Watches all completed workout sessions (`completedAt IS NOT NULL AND deletedAt IS NULL`),
   /// ordered from newest to oldest, including volume & PR counts.
   Stream<List<CompletedWorkoutSessionSummary>> watchCompletedWorkoutSessions() {
-    return _watchAnalyticsTablesTrigger().asyncMap(
-      (_) => _loadCompletedWorkoutSessions(),
+    return watchWithTableUpdates<List<CompletedWorkoutSessionSummary>>(
+      db: _db,
+      tables: _analyticsWatchedTables,
+      load: _loadCompletedWorkoutSessions,
     );
   }
 

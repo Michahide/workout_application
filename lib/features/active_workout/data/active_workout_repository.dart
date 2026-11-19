@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
 import '../../../core/database/syncable_table_mixin.dart';
+import '../../../core/database/table_updates_watcher.dart';
 import '../../../core/database/tables.dart';
 import '../../settings/data/app_settings_repository.dart';
 import '../../workout_plans/data/workout_plan_repository.dart';
@@ -199,46 +200,64 @@ class ActiveWorkoutRepository {
   /// Watches the full [ActiveWorkoutSessionDetails] hierarchy so any edit to a set,
   /// machine, or exercise immediately updates the UI and survives app restarts.
   Stream<ActiveWorkoutSessionDetails?> watchActiveSessionDetails() {
-    return watchActiveSession().asyncExpand((session) {
-      if (session == null) {
-        return Stream.value(null);
-      }
+    return watchWithTableUpdates<ActiveWorkoutSessionDetails?>(
+      db: _db,
+      tables: [
+        _db.workoutSessions,
+        _db.workoutSessionExercises,
+        _db.workoutSets,
+        _db.gymMachines,
+        _db.gymLocations,
+        _db.workoutPlans,
+        _db.exercises,
+      ],
+      load: _loadActiveSessionDetails,
+    );
+  }
 
-      // Watch session exercises, sets, and gym machines reactively
-      final sessionExercisesStream = (_db.select(_db.workoutSessionExercises)
-            ..where(
-              (tbl) =>
-                  tbl.workoutSessionId.equals(session.id) &
-                  tbl.deletedAt.isNull(),
-            )
-            ..orderBy([(tbl) => OrderingTerm.asc(tbl.sortOrder)]))
-          .watch();
+  Future<ActiveWorkoutSessionDetails?> _loadActiveSessionDetails() async {
+    final session = await (_db.select(_db.workoutSessions)
+          ..where((tbl) => tbl.completedAt.isNull() & tbl.deletedAt.isNull())
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.startedAt)])
+          ..limit(1))
+        .getSingleOrNull();
 
-      final setsStream = (_db.select(_db.workoutSets)
-            ..where((tbl) => tbl.deletedAt.isNull())
-            ..orderBy([
-              (tbl) => OrderingTerm.asc(tbl.setNumber),
-              (tbl) => OrderingTerm.asc(tbl.createdAt),
-            ]))
-          .watch();
+    if (session == null) return null;
 
-      final machinesStream = (_db.select(_db.gymMachines)
-            ..where((tbl) => tbl.deletedAt.isNull()))
-          .watch();
+    final sessionExercises = await (_db.select(_db.workoutSessionExercises)
+          ..where(
+            (tbl) =>
+                tbl.workoutSessionId.equals(session.id) &
+                tbl.deletedAt.isNull(),
+          )
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.sortOrder)]))
+        .get();
 
-      return sessionExercisesStream.asyncExpand((sessionExercises) {
-        return setsStream.asyncExpand((allSets) {
-          return machinesStream.asyncMap((allMachines) async {
-            return _buildSessionDetails(
-              session: session,
-              sessionExercises: sessionExercises,
-              allSets: allSets,
-              allMachines: allMachines,
-            );
-          });
-        });
-      });
-    });
+    final seIds = sessionExercises.map((e) => e.id).toList(growable: false);
+    final allSets = seIds.isEmpty
+        ? const <WorkoutSet>[]
+        : await (_db.select(_db.workoutSets)
+              ..where(
+                (tbl) =>
+                    tbl.workoutSessionExerciseId.isIn(seIds) &
+                    tbl.deletedAt.isNull(),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm.asc(tbl.setNumber),
+                (tbl) => OrderingTerm.asc(tbl.createdAt),
+              ]))
+            .get();
+
+    final allMachines = await (_db.select(_db.gymMachines)
+          ..where((tbl) => tbl.deletedAt.isNull()))
+        .get();
+
+    return _buildSessionDetails(
+      session: session,
+      sessionExercises: sessionExercises,
+      allSets: allSets,
+      allMachines: allMachines,
+    );
   }
 
   Future<ActiveWorkoutSessionDetails> _buildSessionDetails({

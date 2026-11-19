@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/syncable_table_mixin.dart';
+import '../../../core/database/table_updates_watcher.dart';
 
 part 'workout_plan_repository.g.dart';
 
@@ -122,56 +123,66 @@ class WorkoutPlanRepository {
 
   /// Watches all active (non-deleted) workout plans along with their ordered exercises.
   Stream<List<WorkoutPlanWithExercises>> watchPlansWithExercises() {
-    final plansQuery = _db.select(_db.workoutPlans)
-      ..where((tbl) => tbl.deletedAt.isNull())
-      ..orderBy([(tbl) => OrderingTerm.asc(tbl.name)]);
+    return watchWithTableUpdates<List<WorkoutPlanWithExercises>>(
+      db: _db,
+      tables: [
+        _db.workoutPlans,
+        _db.workoutPlanExercises,
+        _db.exercises,
+      ],
+      load: _loadAllPlansWithExercises,
+    );
+  }
 
-    final itemsQuery = _db.select(_db.workoutPlanExercises).join([
+  Future<List<WorkoutPlanWithExercises>> _loadAllPlansWithExercises() async {
+    final plans = await (_db.select(_db.workoutPlans)
+          ..where((tbl) => tbl.deletedAt.isNull())
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.name)]))
+        .get();
+
+    if (plans.isEmpty) return const [];
+
+    final itemRows = await (_db.select(_db.workoutPlanExercises).join([
       innerJoin(
         _db.exercises,
         _db.exercises.id.equalsExp(_db.workoutPlanExercises.exerciseId) &
             _db.exercises.deletedAt.isNull(),
       ),
     ])
-      ..where(_db.workoutPlanExercises.deletedAt.isNull())
-      ..orderBy([OrderingTerm.asc(_db.workoutPlanExercises.sortOrder)]);
+          ..where(_db.workoutPlanExercises.deletedAt.isNull())
+          ..orderBy([OrderingTerm.asc(_db.workoutPlanExercises.sortOrder)]))
+        .get();
 
-    return plansQuery.watch().asyncExpand((plans) {
-      return itemsQuery.watch().map((itemRows) {
-        final groupedByPlan = <String, List<TypedResult>>{};
-        for (final row in itemRows) {
-          final pe = row.readTable(_db.workoutPlanExercises);
-          groupedByPlan.putIfAbsent(pe.workoutPlanId, () => []).add(row);
-        }
+    final groupedByPlan = <String, List<TypedResult>>{};
+    for (final row in itemRows) {
+      final pe = row.readTable(_db.workoutPlanExercises);
+      groupedByPlan.putIfAbsent(pe.workoutPlanId, () => []).add(row);
+    }
 
-        return plans.map((plan) {
-          final rows = groupedByPlan[plan.id] ?? const <TypedResult>[];
-          final groupIds = rows
-              .map(
-                (r) => r.readTable(_db.workoutPlanExercises).supersetGroupId,
-              )
-              .toList(growable: false);
-          final badges = computeSupersetBadges(groupIds);
+    return plans.map((plan) {
+      final rows = groupedByPlan[plan.id] ?? const <TypedResult>[];
+      final groupIds = rows
+          .map((r) => r.readTable(_db.workoutPlanExercises).supersetGroupId)
+          .toList(growable: false);
+      final badges = computeSupersetBadges(groupIds);
 
-          final enriched = <WorkoutPlanExerciseWithDetails>[];
-          for (var i = 0; i < rows.length; i++) {
-            final row = rows[i];
-            enriched.add(
-              WorkoutPlanExerciseWithDetails(
-                planExercise: row.readTable(_db.workoutPlanExercises),
-                exercise: row.readTable(_db.exercises),
-                supersetBadge: badges[i],
-              ),
-            );
-          }
+      final enriched = <WorkoutPlanExerciseWithDetails>[];
+      for (var i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        enriched.add(
+          WorkoutPlanExerciseWithDetails(
+            planExercise: row.readTable(_db.workoutPlanExercises),
+            exercise: row.readTable(_db.exercises),
+            supersetBadge: badges[i],
+          ),
+        );
+      }
 
-          return WorkoutPlanWithExercises(
-            plan: plan,
-            exercises: enriched,
-          );
-        }).toList(growable: false);
-      });
-    });
+      return WorkoutPlanWithExercises(
+        plan: plan,
+        exercises: enriched,
+      );
+    }).toList(growable: false);
   }
 
   /// Fetches a single active [WorkoutPlanWithExercises] by [planId].
