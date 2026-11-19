@@ -2063,6 +2063,20 @@ class $ExerciseMediaTable extends ExerciseMedia
       'REFERENCES exercises (id) ON DELETE CASCADE',
     ),
   );
+  static const VerificationMeta _gymMachineIdMeta = const VerificationMeta(
+    'gymMachineId',
+  );
+  @override
+  late final GeneratedColumn<String> gymMachineId = GeneratedColumn<String>(
+    'gym_machine_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES gym_machines (id) ON DELETE CASCADE',
+    ),
+  );
   @override
   late final GeneratedColumnWithTypeConverter<MediaType, String> mediaType =
       GeneratedColumn<String>(
@@ -2171,6 +2185,7 @@ class $ExerciseMediaTable extends ExerciseMedia
     deletedAt,
     syncStatus,
     exerciseId,
+    gymMachineId,
     mediaType,
     sortOrder,
     localPath,
@@ -2221,6 +2236,15 @@ class $ExerciseMediaTable extends ExerciseMedia
       );
     } else if (isInserting) {
       context.missing(_exerciseIdMeta);
+    }
+    if (data.containsKey('gym_machine_id')) {
+      context.handle(
+        _gymMachineIdMeta,
+        gymMachineId.isAcceptableOrUnknown(
+          data['gym_machine_id']!,
+          _gymMachineIdMeta,
+        ),
+      );
     }
     if (data.containsKey('sort_order')) {
       context.handle(
@@ -2315,6 +2339,10 @@ class $ExerciseMediaTable extends ExerciseMedia
         DriftSqlType.string,
         data['${effectivePrefix}exercise_id'],
       )!,
+      gymMachineId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}gym_machine_id'],
+      ),
       mediaType: $ExerciseMediaTable.$convertermediaType.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -2381,6 +2409,7 @@ class ExerciseMediaData extends DataClass
   final DateTime? deletedAt;
   final SyncStatus syncStatus;
   final String exerciseId;
+  final String? gymMachineId;
   final MediaType mediaType;
   final int sortOrder;
   final String localPath;
@@ -2397,6 +2426,7 @@ class ExerciseMediaData extends DataClass
     this.deletedAt,
     required this.syncStatus,
     required this.exerciseId,
+    this.gymMachineId,
     required this.mediaType,
     required this.sortOrder,
     required this.localPath,
@@ -2422,6 +2452,9 @@ class ExerciseMediaData extends DataClass
       );
     }
     map['exercise_id'] = Variable<String>(exerciseId);
+    if (!nullToAbsent || gymMachineId != null) {
+      map['gym_machine_id'] = Variable<String>(gymMachineId);
+    }
     {
       map['media_type'] = Variable<String>(
         $ExerciseMediaTable.$convertermediaType.toSql(mediaType),
@@ -2460,6 +2493,9 @@ class ExerciseMediaData extends DataClass
           : Value(deletedAt),
       syncStatus: Value(syncStatus),
       exerciseId: Value(exerciseId),
+      gymMachineId: gymMachineId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gymMachineId),
       mediaType: Value(mediaType),
       sortOrder: Value(sortOrder),
       localPath: Value(localPath),
@@ -2494,6 +2530,7 @@ class ExerciseMediaData extends DataClass
         serializer.fromJson<String>(json['syncStatus']),
       ),
       exerciseId: serializer.fromJson<String>(json['exerciseId']),
+      gymMachineId: serializer.fromJson<String?>(json['gymMachineId']),
       mediaType: $ExerciseMediaTable.$convertermediaType.fromJson(
         serializer.fromJson<String>(json['mediaType']),
       ),
@@ -2525,6 +2562,7 @@ class ExerciseMediaData extends DataClass
         $ExerciseMediaTable.$convertersyncStatus.toJson(syncStatus),
       ),
       'exerciseId': serializer.toJson<String>(exerciseId),
+      'gymMachineId': serializer.toJson<String?>(gymMachineId),
       'mediaType': serializer.toJson<String>(
         $ExerciseMediaTable.$convertermediaType.toJson(mediaType),
       ),
@@ -2548,6 +2586,7 @@ class ExerciseMediaData extends DataClass
     Value<DateTime?> deletedAt = const Value.absent(),
     SyncStatus? syncStatus,
     String? exerciseId,
+    Value<String?> gymMachineId = const Value.absent(),
     MediaType? mediaType,
     int? sortOrder,
     String? localPath,
@@ -2564,6 +2603,7 @@ class ExerciseMediaData extends DataClass
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
     syncStatus: syncStatus ?? this.syncStatus,
     exerciseId: exerciseId ?? this.exerciseId,
+    gymMachineId: gymMachineId.present ? gymMachineId.value : this.gymMachineId,
     mediaType: mediaType ?? this.mediaType,
     sortOrder: sortOrder ?? this.sortOrder,
     localPath: localPath ?? this.localPath,
@@ -2592,6 +2632,9 @@ class ExerciseMediaData extends DataClass
       exerciseId: data.exerciseId.present
           ? data.exerciseId.value
           : this.exerciseId,
+      gymMachineId: data.gymMachineId.present
+          ? data.gymMachineId.value
+          : this.gymMachineId,
       mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       localPath: data.localPath.present ? data.localPath.value : this.localPath,
@@ -2623,6 +2666,7 @@ class ExerciseMediaData extends DataClass
           ..write('deletedAt: $deletedAt, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('exerciseId: $exerciseId, ')
+          ..write('gymMachineId: $gymMachineId, ')
           ..write('mediaType: $mediaType, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('localPath: $localPath, ')
@@ -2644,6 +2688,7 @@ class ExerciseMediaData extends DataClass
     deletedAt,
     syncStatus,
     exerciseId,
+    gymMachineId,
     mediaType,
     sortOrder,
     localPath,
@@ -2664,6 +2709,7 @@ class ExerciseMediaData extends DataClass
           other.deletedAt == this.deletedAt &&
           other.syncStatus == this.syncStatus &&
           other.exerciseId == this.exerciseId &&
+          other.gymMachineId == this.gymMachineId &&
           other.mediaType == this.mediaType &&
           other.sortOrder == this.sortOrder &&
           other.localPath == this.localPath &&
@@ -2682,6 +2728,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
   final Value<DateTime?> deletedAt;
   final Value<SyncStatus> syncStatus;
   final Value<String> exerciseId;
+  final Value<String?> gymMachineId;
   final Value<MediaType> mediaType;
   final Value<int> sortOrder;
   final Value<String> localPath;
@@ -2699,6 +2746,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
     this.deletedAt = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.exerciseId = const Value.absent(),
+    this.gymMachineId = const Value.absent(),
     this.mediaType = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.localPath = const Value.absent(),
@@ -2717,6 +2765,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
     this.deletedAt = const Value.absent(),
     this.syncStatus = const Value.absent(),
     required String exerciseId,
+    this.gymMachineId = const Value.absent(),
     required MediaType mediaType,
     this.sortOrder = const Value.absent(),
     required String localPath,
@@ -2738,6 +2787,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
     Expression<DateTime>? deletedAt,
     Expression<String>? syncStatus,
     Expression<String>? exerciseId,
+    Expression<String>? gymMachineId,
     Expression<String>? mediaType,
     Expression<int>? sortOrder,
     Expression<String>? localPath,
@@ -2756,6 +2806,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (syncStatus != null) 'sync_status': syncStatus,
       if (exerciseId != null) 'exercise_id': exerciseId,
+      if (gymMachineId != null) 'gym_machine_id': gymMachineId,
       if (mediaType != null) 'media_type': mediaType,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (localPath != null) 'local_path': localPath,
@@ -2778,6 +2829,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
     Value<DateTime?>? deletedAt,
     Value<SyncStatus>? syncStatus,
     Value<String>? exerciseId,
+    Value<String?>? gymMachineId,
     Value<MediaType>? mediaType,
     Value<int>? sortOrder,
     Value<String>? localPath,
@@ -2796,6 +2848,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
       deletedAt: deletedAt ?? this.deletedAt,
       syncStatus: syncStatus ?? this.syncStatus,
       exerciseId: exerciseId ?? this.exerciseId,
+      gymMachineId: gymMachineId ?? this.gymMachineId,
       mediaType: mediaType ?? this.mediaType,
       sortOrder: sortOrder ?? this.sortOrder,
       localPath: localPath ?? this.localPath,
@@ -2831,6 +2884,9 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
     }
     if (exerciseId.present) {
       map['exercise_id'] = Variable<String>(exerciseId.value);
+    }
+    if (gymMachineId.present) {
+      map['gym_machine_id'] = Variable<String>(gymMachineId.value);
     }
     if (mediaType.present) {
       map['media_type'] = Variable<String>(
@@ -2880,6 +2936,7 @@ class ExerciseMediaCompanion extends UpdateCompanion<ExerciseMediaData> {
           ..write('deletedAt: $deletedAt, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('exerciseId: $exerciseId, ')
+          ..write('gymMachineId: $gymMachineId, ')
           ..write('mediaType: $mediaType, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('localPath: $localPath, ')
@@ -7308,6 +7365,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
+        'gym_machines',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('exercise_media', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
         'workout_plans',
         limitUpdateKind: UpdateKind.delete,
       ),
@@ -8689,6 +8753,24 @@ final class $$GymMachinesTableReferences
     );
   }
 
+  static MultiTypedResultKey<$ExerciseMediaTable, List<ExerciseMediaData>>
+  _exerciseMediaRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.exerciseMedia,
+    aliasName: 'gym_machines__id__exercise_media__gym_machine_id',
+  );
+
+  $$ExerciseMediaTableProcessedTableManager get exerciseMediaRefs {
+    final manager = $$ExerciseMediaTableTableManager(
+      $_db,
+      $_db.exerciseMedia,
+    ).filter((f) => f.gymMachineId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_exerciseMediaRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<
     $WorkoutPlanExercisesTable,
     List<WorkoutPlanExercise>
@@ -8841,6 +8923,31 @@ class $$GymMachinesTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> exerciseMediaRefs(
+    Expression<bool> Function($$ExerciseMediaTableFilterComposer f) f,
+  ) {
+    final $$ExerciseMediaTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseMedia,
+      getReferencedColumn: (t) => t.gymMachineId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseMediaTableFilterComposer(
+            $db: $db,
+            $table: $db.exerciseMedia,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> workoutPlanExercisesRefs(
@@ -9078,6 +9185,31 @@ class $$GymMachinesTableAnnotationComposer
     return composer;
   }
 
+  Expression<T> exerciseMediaRefs<T extends Object>(
+    Expression<T> Function($$ExerciseMediaTableAnnotationComposer a) f,
+  ) {
+    final $$ExerciseMediaTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.exerciseMedia,
+      getReferencedColumn: (t) => t.gymMachineId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExerciseMediaTableAnnotationComposer(
+            $db: $db,
+            $table: $db.exerciseMedia,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> workoutPlanExercisesRefs<T extends Object>(
     Expression<T> Function($$WorkoutPlanExercisesTableAnnotationComposer a) f,
   ) {
@@ -9148,6 +9280,7 @@ class $$GymMachinesTableTableManager
           PrefetchHooks Function({
             bool gymLocationId,
             bool exerciseId,
+            bool exerciseMediaRefs,
             bool workoutPlanExercisesRefs,
             bool workoutSessionExercisesRefs,
           })
@@ -9227,12 +9360,14 @@ class $$GymMachinesTableTableManager
               ({
                 gymLocationId = false,
                 exerciseId = false,
+                exerciseMediaRefs = false,
                 workoutPlanExercisesRefs = false,
                 workoutSessionExercisesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (exerciseMediaRefs) db.exerciseMedia,
                     if (workoutPlanExercisesRefs) db.workoutPlanExercises,
                     if (workoutSessionExercisesRefs) db.workoutSessionExercises,
                   ],
@@ -9279,6 +9414,26 @@ class $$GymMachinesTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (exerciseMediaRefs)
+                        await $_getPrefetchedDataByColumns<
+                          GymMachine,
+                          $GymMachinesTable,
+                          ExerciseMediaData,
+                          $ExerciseMediaTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GymMachinesTableReferences
+                              ._exerciseMediaRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GymMachinesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).exerciseMediaRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'gym_machine_id',
+                          typedResults: items,
+                        ),
                       if (workoutPlanExercisesRefs)
                         await $_getPrefetchedDataByColumns<
                           GymMachine,
@@ -9342,6 +9497,7 @@ typedef $$GymMachinesTableProcessedTableManager =
       PrefetchHooks Function({
         bool gymLocationId,
         bool exerciseId,
+        bool exerciseMediaRefs,
         bool workoutPlanExercisesRefs,
         bool workoutSessionExercisesRefs,
       })
@@ -9354,6 +9510,7 @@ typedef $$ExerciseMediaTableCreateCompanionBuilder =
       Value<DateTime?> deletedAt,
       Value<SyncStatus> syncStatus,
       required String exerciseId,
+      Value<String?> gymMachineId,
       required MediaType mediaType,
       Value<int> sortOrder,
       required String localPath,
@@ -9373,6 +9530,7 @@ typedef $$ExerciseMediaTableUpdateCompanionBuilder =
       Value<DateTime?> deletedAt,
       Value<SyncStatus> syncStatus,
       Value<String> exerciseId,
+      Value<String?> gymMachineId,
       Value<MediaType> mediaType,
       Value<int> sortOrder,
       Value<String> localPath,
@@ -9405,6 +9563,24 @@ final class $$ExerciseMediaTableReferences
       $_db.exercises,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_exerciseIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $GymMachinesTable _gymMachineIdTable(_$AppDatabase db) => db
+      .gymMachines
+      .createAlias('exercise_media__gym_machine_id__gym_machines__id');
+
+  $$GymMachinesTableProcessedTableManager? get gymMachineId {
+    final $_column = $_itemColumn<String>('gym_machine_id');
+    if ($_column == null) return null;
+    final manager = $$GymMachinesTableTableManager(
+      $_db,
+      $_db.gymMachines,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_gymMachineIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -9516,6 +9692,29 @@ class $$ExerciseMediaTableFilterComposer
     );
     return composer;
   }
+
+  $$GymMachinesTableFilterComposer get gymMachineId {
+    final $$GymMachinesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gymMachineId,
+      referencedTable: $db.gymMachines,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GymMachinesTableFilterComposer(
+            $db: $db,
+            $table: $db.gymMachines,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$ExerciseMediaTableOrderingComposer
@@ -9619,6 +9818,29 @@ class $$ExerciseMediaTableOrderingComposer
     );
     return composer;
   }
+
+  $$GymMachinesTableOrderingComposer get gymMachineId {
+    final $$GymMachinesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gymMachineId,
+      referencedTable: $db.gymMachines,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GymMachinesTableOrderingComposer(
+            $db: $db,
+            $table: $db.gymMachines,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$ExerciseMediaTableAnnotationComposer
@@ -9708,6 +9930,29 @@ class $$ExerciseMediaTableAnnotationComposer
     );
     return composer;
   }
+
+  $$GymMachinesTableAnnotationComposer get gymMachineId {
+    final $$GymMachinesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.gymMachineId,
+      referencedTable: $db.gymMachines,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GymMachinesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.gymMachines,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$ExerciseMediaTableTableManager
@@ -9723,7 +9968,7 @@ class $$ExerciseMediaTableTableManager
           $$ExerciseMediaTableUpdateCompanionBuilder,
           (ExerciseMediaData, $$ExerciseMediaTableReferences),
           ExerciseMediaData,
-          PrefetchHooks Function({bool exerciseId})
+          PrefetchHooks Function({bool exerciseId, bool gymMachineId})
         > {
   $$ExerciseMediaTableTableManager(_$AppDatabase db, $ExerciseMediaTable table)
     : super(
@@ -9744,6 +9989,7 @@ class $$ExerciseMediaTableTableManager
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<SyncStatus> syncStatus = const Value.absent(),
                 Value<String> exerciseId = const Value.absent(),
+                Value<String?> gymMachineId = const Value.absent(),
                 Value<MediaType> mediaType = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<String> localPath = const Value.absent(),
@@ -9761,6 +10007,7 @@ class $$ExerciseMediaTableTableManager
                 deletedAt: deletedAt,
                 syncStatus: syncStatus,
                 exerciseId: exerciseId,
+                gymMachineId: gymMachineId,
                 mediaType: mediaType,
                 sortOrder: sortOrder,
                 localPath: localPath,
@@ -9780,6 +10027,7 @@ class $$ExerciseMediaTableTableManager
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<SyncStatus> syncStatus = const Value.absent(),
                 required String exerciseId,
+                Value<String?> gymMachineId = const Value.absent(),
                 required MediaType mediaType,
                 Value<int> sortOrder = const Value.absent(),
                 required String localPath,
@@ -9797,6 +10045,7 @@ class $$ExerciseMediaTableTableManager
                 deletedAt: deletedAt,
                 syncStatus: syncStatus,
                 exerciseId: exerciseId,
+                gymMachineId: gymMachineId,
                 mediaType: mediaType,
                 sortOrder: sortOrder,
                 localPath: localPath,
@@ -9816,7 +10065,7 @@ class $$ExerciseMediaTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({exerciseId = false}) {
+          prefetchHooksCallback: ({exerciseId = false, gymMachineId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -9847,6 +10096,17 @@ class $$ExerciseMediaTableTableManager
                             .id,
                       ) as T;
                     }
+                    if (gymMachineId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.gymMachineId,
+                        referencedTable: $$ExerciseMediaTableReferences
+                            ._gymMachineIdTable(db),
+                        referencedColumn: $$ExerciseMediaTableReferences
+                            ._gymMachineIdTable(db)
+                            .id,
+                      ) as T;
+                    }
 
                     return state;
                   },
@@ -9871,7 +10131,7 @@ typedef $$ExerciseMediaTableProcessedTableManager =
       $$ExerciseMediaTableUpdateCompanionBuilder,
       (ExerciseMediaData, $$ExerciseMediaTableReferences),
       ExerciseMediaData,
-      PrefetchHooks Function({bool exerciseId})
+      PrefetchHooks Function({bool exerciseId, bool gymMachineId})
     >;
 typedef $$WorkoutPlansTableCreateCompanionBuilder =
     WorkoutPlansCompanion Function({

@@ -852,6 +852,9 @@ class SyncEngine {
                 syncStatus: const Value(SyncStatus.synced),
                 exerciseId:
                     (json['exercise_id'] ?? json['exerciseId']) as String,
+                gymMachineId: Value(
+                  (json['gym_machine_id'] ?? json['gymMachineId']) as String?,
+                ),
                 mediaType: MediaType.values
                         .where((m) => m.name == mediaTypeName)
                         .firstOrNull ??
@@ -1181,6 +1184,7 @@ class SyncEngine {
         'updated_at': r.updatedAt.toUtc().toIso8601String(),
         'deleted_at': r.deletedAt?.toUtc().toIso8601String(),
         'exercise_id': r.exerciseId,
+        'gym_machine_id': r.gymMachineId,
         'media_type': r.mediaType.name,
         'sort_order': r.sortOrder,
         'file_size_bytes': r.fileSizeBytes,

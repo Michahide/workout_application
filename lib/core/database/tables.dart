@@ -167,10 +167,14 @@ class GymMachines extends Table with SyncableTableMixin {
   TextColumn get pinnedNotes => text().nullable()();
 }
 
-/// Compressed photo/video media attachments for an exercise (max 4 photos, 3 videos).
+/// Compressed photo/video media attachments for an exercise and specific gym machine
+/// (max 4 photos, 3 videos per machine/exercise).
 class ExerciseMedia extends Table with SyncableTableMixin {
   TextColumn get exerciseId =>
       text().references(Exercises, #id, onDelete: KeyAction.cascade)();
+  TextColumn get gymMachineId => text()
+      .nullable()
+      .references(GymMachines, #id, onDelete: KeyAction.cascade)();
   TextColumn get mediaType => textEnum<MediaType>()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   TextColumn get localPath => text()();

@@ -8,6 +8,7 @@ import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
 import '../../gym_locations/data/gym_location_repository.dart';
 import '../../gym_locations/presentation/gym_locations_providers.dart';
 import '../../gym_locations/presentation/gym_machine_form_sheet.dart';
+import '../../gym_locations/presentation/gym_machine_profile_card.dart';
 import '../data/exercise_library_repository.dart';
 import 'exercise_form_sheet.dart';
 import 'exercise_library_providers.dart';
@@ -127,7 +128,7 @@ class ExerciseDetailScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             children: [
-              // Exercise Metadata Summary Card
+              // 1. Exercise Metadata Summary Card
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -195,30 +196,40 @@ class ExerciseDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 20),
 
-              // Media Gallery Section (4 Photos & 3 Videos with WebP thumbnails)
-              ExerciseMediaGallery(exerciseId: exercise.id),
-              const SizedBox(height: 24),
-
-              // Linked Gym Machines Section
+              // 2. Unified Gym Machines Section (Merk + Foto/Video + 1RM + Working Set Progress)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      'Alat Terdaftar per Gym',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Daftar Alat & Mesin (Merk, Media & 1RM)',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Tiap mesin menyimpan foto/video, catatan kursi, beban working set, dan 1RM secara terpisah.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                        ),
+                      ],
                     ),
                   ),
-                  TextButton.icon(
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
                     onPressed: () => _openAddMachineSheet(context),
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Tambah Alat'),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
               machinesAsync.when(
                 data: (machines) {
@@ -240,12 +251,18 @@ class ExerciseDetailScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Belum ada alat gym yang dihubungkan ke gerakan ini.',
+                            'Belum ada mesin spesifik (misal Hoist / Technogym #1) yang didaftarkan untuk gerakan ini.',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: colorScheme.onSurfaceVariant,
                                     ),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _openAddMachineSheet(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Daftarkan Alat & Foto Pertama'),
                           ),
                         ],
                       ),
@@ -254,61 +271,19 @@ class ExerciseDetailScreen extends ConsumerWidget {
 
                   return Column(
                     children: machines.map((item) {
-                      final machine = item.machine;
-                      final gymName =
-                          item.gymLocation?.name ?? 'Global (Semua Gym)';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: const Icon(Icons.storefront_outlined),
-                          title: Text(
-                            machine.brandName != null
-                                ? '$gymName • ${machine.brandName}'
-                                : gymName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GymMachineProfileCard(
+                          item: item,
+                          showExerciseTitle: false,
+                          showGymLocationName: true,
+                          onEdit: () => _openAddMachineSheet(
+                            context,
+                            existingMachine: item.machine,
                           ),
-                          subtitle: machine.pinnedNotes != null
-                              ? Text('📌 ${machine.pinnedNotes}')
-                              : null,
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  machine.weightUnit.label,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: colorScheme.onPrimaryContainer,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () => _openAddMachineSheet(
-                                  context,
-                                  existingMachine: machine,
-                                ),
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                              ),
-                              IconButton(
-                                onPressed: () => ref
-                                    .read(gymLocationRepositoryProvider)
-                                    .softDeleteGymMachine(machine.id),
-                                icon:
-                                    const Icon(Icons.delete_outline, size: 18),
-                              ),
-                            ],
-                          ),
+                          onDelete: () => ref
+                              .read(gymLocationRepositoryProvider)
+                              .softDeleteGymMachine(item.machine.id),
                         ),
                       );
                     }).toList(),
@@ -317,12 +292,44 @@ class ExerciseDetailScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text('Gagal memuat daftar alat: $e'),
               ),
+
+              const SizedBox(height: 12),
+              // Optional General Exercise Media Fallback (for Bodyweight/Free-Weight without specific machine)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Media Umum Gerakan (Tanpa Mesin Spesifik)',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                subtitle: Text(
+                  'Gunakan jika gerakan tidak terikat pada merk mesin tertentu (misal Bodyweight).',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 12),
+                    child: ExerciseMediaGallery(
+                      exerciseId: exercise.id,
+                      gymMachineId: null,
+                    ),
+                  ),
+                ],
+              ),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) =>
             Center(child: Text('Gagal memuat detail gerakan: $err')),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openAddMachineSheet(context),
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Alat / Merk'),
       ),
     );
   }

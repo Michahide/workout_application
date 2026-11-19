@@ -99,13 +99,18 @@ final exerciseDetailStreamProvider = StreamProvider.autoDispose
       return repo.watchExerciseById(exerciseId);
     });
 
+typedef ExerciseMediaScopeKey = ({String exerciseId, String? gymMachineId});
+
 final exerciseMediaListProvider = StreamProvider.autoDispose
-    .family<List<ExerciseMediaData>, String>((ref, exerciseId) {
+    .family<List<ExerciseMediaData>, ExerciseMediaScopeKey>((ref, key) {
       final repo = ref.watch(exerciseLibraryRepositoryProvider);
-      return repo.watchMediaForExercise(exerciseId);
+      return repo.watchMediaForExercise(
+        key.exerciseId,
+        gymMachineId: key.gymMachineId,
+      );
     });
 
-/// State representing ongoing photo/video compression for an exercise.
+/// State representing ongoing photo/video compression for an exercise/machine.
 class ExerciseMediaUploadState {
   const ExerciseMediaUploadState({
     this.isProcessing = false,
@@ -123,7 +128,7 @@ class ExerciseMediaUploadState {
 @riverpod
 class ExerciseMediaController extends _$ExerciseMediaController {
   @override
-  ExerciseMediaUploadState build(String exerciseId) {
+  ExerciseMediaUploadState build(String exerciseId, [String? gymMachineId]) {
     return const ExerciseMediaUploadState();
   }
 
@@ -131,9 +136,10 @@ class ExerciseMediaController extends _$ExerciseMediaController {
     final repo = ref.read(exerciseLibraryRepositoryProvider);
     final compressionService = ref.read(mediaCompressionServiceProvider);
 
-    // Check active photo count (max 4) before opening camera/gallery
+    // Check active photo count (max 4) for this specific machine/exercise
     await repo.ensureCanAddMedia(
       exerciseId: exerciseId,
+      gymMachineId: gymMachineId,
       mediaType: MediaType.photo,
     );
 
@@ -150,6 +156,7 @@ class ExerciseMediaController extends _$ExerciseMediaController {
 
       await repo.addExerciseMedia(
         exerciseId: exerciseId,
+        gymMachineId: gymMachineId,
         mediaType: MediaType.photo,
         localPath: result.localPath,
         fileSizeBytes: result.fileSizeBytes,
@@ -163,9 +170,10 @@ class ExerciseMediaController extends _$ExerciseMediaController {
     final repo = ref.read(exerciseLibraryRepositoryProvider);
     final compressionService = ref.read(mediaCompressionServiceProvider);
 
-    // Check active video count (max 3) before opening camera/gallery
+    // Check active video count (max 3) for this specific machine/exercise
     await repo.ensureCanAddMedia(
       exerciseId: exerciseId,
+      gymMachineId: gymMachineId,
       mediaType: MediaType.video,
     );
 
@@ -190,6 +198,7 @@ class ExerciseMediaController extends _$ExerciseMediaController {
 
       await repo.addExerciseMedia(
         exerciseId: exerciseId,
+        gymMachineId: gymMachineId,
         mediaType: MediaType.video,
         localPath: result.localPath,
         thumbnailLocalPath: result.thumbnailLocalPath,

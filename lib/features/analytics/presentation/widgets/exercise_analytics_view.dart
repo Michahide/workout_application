@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/domain_labels.dart';
 import '../../../exercise_library/presentation/exercise_library_providers.dart';
+import '../../../exercise_library/presentation/exercise_media_gallery.dart';
 import '../../../gym_locations/data/gym_location_repository.dart';
 import '../../../gym_locations/presentation/gym_locations_providers.dart';
 import '../../data/analytics_repository.dart';
@@ -367,6 +368,23 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                 child: Center(child: CircularProgressIndicator()),
               ),
               error: (err, _) => Text('Gagal memuat grafik: $err'),
+            ),
+
+            // 5. Unified Machine Media Section (Photos & Videos bound to the selected GymMachine)
+            const SizedBox(height: 18),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: ExerciseMediaGallery(
+                  exerciseId: effectiveExerciseId,
+                  gymMachineId: effectiveMachineId,
+                  machineTitle: machinesAsync.asData?.value
+                      .where((m) => m.machine.id == effectiveMachineId)
+                      .map(_formatMachineLabel)
+                      .firstOrNull,
+                ),
+              ),
             ),
           ],
         );

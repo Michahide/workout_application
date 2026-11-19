@@ -11,7 +11,8 @@ import '../../../core/database/tables.dart';
 import '../data/exercise_library_repository.dart';
 import 'exercise_library_providers.dart';
 
-/// Displays the Exercise Media gallery (up to 4 Photos and 3 Videos).
+/// Displays the Exercise & Machine Media gallery (up to 4 Photos and 3 Videos
+/// per specific [gymMachineId] or general exercise).
 ///
 /// Architectural Rule:
 /// - Video items in the grid MUST strictly render their compressed `.webp`
@@ -20,9 +21,16 @@ import 'exercise_library_providers.dart';
 /// - `VideoPlayerController` is initialized ONLY inside the full-screen modal
 ///   when the user taps a video thumbnail.
 class ExerciseMediaGallery extends ConsumerWidget {
-  const ExerciseMediaGallery({super.key, required this.exerciseId});
+  const ExerciseMediaGallery({
+    super.key,
+    required this.exerciseId,
+    this.gymMachineId,
+    this.machineTitle,
+  });
 
   final String exerciseId;
+  final String? gymMachineId;
+  final String? machineTitle;
 
   Future<ImageSource?> _pickMediaSource(
     BuildContext context, {
@@ -61,13 +69,15 @@ class ExerciseMediaGallery extends ConsumerWidget {
   Future<void> _handleAddPhoto(BuildContext context, WidgetRef ref) async {
     final source = await _pickMediaSource(
       context,
-      title: 'Tambah Foto Form / Setup (WebP 1080p)',
+      title: 'Tambah Foto Alat / Setup (WebP 1080p)',
     );
     if (source == null || !context.mounted) return;
 
     try {
       await ref
-          .read(exerciseMediaControllerProvider(exerciseId).notifier)
+          .read(
+            exerciseMediaControllerProvider(exerciseId, gymMachineId).notifier,
+          )
           .pickAndAddPhoto(source);
     } catch (e) {
       if (context.mounted) {
@@ -81,13 +91,15 @@ class ExerciseMediaGallery extends ConsumerWidget {
   Future<void> _handleAddVideo(BuildContext context, WidgetRef ref) async {
     final source = await _pickMediaSource(
       context,
-      title: 'Tambah Video Form (720p MP4, Maks 30 dtk)',
+      title: 'Tambah Video Alat / Form (720p MP4, Maks 30 dtk)',
     );
     if (source == null || !context.mounted) return;
 
     try {
       await ref
-          .read(exerciseMediaControllerProvider(exerciseId).notifier)
+          .read(
+            exerciseMediaControllerProvider(exerciseId, gymMachineId).notifier,
+          )
           .pickAndAddVideo(source);
     } catch (e) {
       if (context.mounted) {
@@ -126,7 +138,9 @@ class ExerciseMediaGallery extends ConsumerWidget {
 
     if (confirmed == true) {
       await ref
-          .read(exerciseMediaControllerProvider(exerciseId).notifier)
+          .read(
+            exerciseMediaControllerProvider(exerciseId, gymMachineId).notifier,
+          )
           .deleteMedia(media.id);
     }
   }
@@ -147,8 +161,15 @@ class ExerciseMediaGallery extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mediaAsync = ref.watch(exerciseMediaListProvider(exerciseId));
-    final uploadState = ref.watch(exerciseMediaControllerProvider(exerciseId));
+    final mediaAsync = ref.watch(
+      exerciseMediaListProvider((
+        exerciseId: exerciseId,
+        gymMachineId: gymMachineId,
+      )),
+    );
+    final uploadState = ref.watch(
+      exerciseMediaControllerProvider(exerciseId, gymMachineId),
+    );
     final colorScheme = Theme.of(context).colorScheme;
 
     return mediaAsync.when(
@@ -168,30 +189,39 @@ class ExerciseMediaGallery extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                Expanded(
-                  child: Text(
-                    'Panduan Media & Form',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
+                Text(
+                  machineTitle != null
+                      ? 'Foto & Video: $machineTitle'
+                      : 'Foto & Video Umum Gerakan',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-                _QuotaBadge(
-                  icon: Icons.photo_outlined,
-                  label:
-                      'Foto ${photos.length}/${ExerciseLibraryRepository.maxPhotosPerExercise}',
-                  isFull: photos.length >=
-                      ExerciseLibraryRepository.maxPhotosPerExercise,
-                ),
-                const SizedBox(width: 8),
-                _QuotaBadge(
-                  icon: Icons.videocam_outlined,
-                  label:
-                      'Video ${videos.length}/${ExerciseLibraryRepository.maxVideosPerExercise}',
-                  isFull: videos.length >=
-                      ExerciseLibraryRepository.maxVideosPerExercise,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _QuotaBadge(
+                      icon: Icons.photo_outlined,
+                      label:
+                          'Foto ${photos.length}/${ExerciseLibraryRepository.maxPhotosPerExercise}',
+                      isFull: photos.length >=
+                          ExerciseLibraryRepository.maxPhotosPerExercise,
+                    ),
+                    const SizedBox(width: 6),
+                    _QuotaBadge(
+                      icon: Icons.videocam_outlined,
+                      label:
+                          'Video ${videos.length}/${ExerciseLibraryRepository.maxVideosPerExercise}',
+                      isFull: videos.length >=
+                          ExerciseLibraryRepository.maxVideosPerExercise,
+                    ),
+                  ],
                 ),
               ],
             ),

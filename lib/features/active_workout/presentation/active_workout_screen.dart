@@ -29,21 +29,23 @@ class ActiveWorkoutScreen extends ConsumerWidget {
     final allExercises = await ref.read(allExercisesStreamProvider.future);
     if (!context.mounted) return;
 
-    final chosen = await showModalBottomSheet<({
-      Exercise exercise,
-      String? supersetGroupId,
-    })>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => _AddSessionExerciseSheet(
-        allExercises: allExercises,
-        existingExercises: sessionDetails.exercises,
-      ),
-    );
+    final chosen =
+        await showModalBottomSheet<
+          ({Exercise exercise, String? supersetGroupId})
+        >(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _AddSessionExerciseSheet(
+            allExercises: allExercises,
+            existingExercises: sessionDetails.exercises,
+          ),
+        );
 
     if (chosen != null) {
-      await ref.read(activeWorkoutRepositoryProvider).addExerciseToSession(
+      await ref
+          .read(activeWorkoutRepositoryProvider)
+          .addExerciseToSession(
             workoutSessionId: sessionDetails.session.id,
             exerciseId: chosen.exercise.id,
             gymLocationId: sessionDetails.session.gymLocationId,
@@ -103,7 +105,9 @@ class ActiveWorkoutScreen extends ConsumerWidget {
 
     if (confirmed == true) {
       await ref.read(restTimerControllerProvider.notifier).resetAll();
-      await ref.read(activeWorkoutRepositoryProvider).finishWorkoutSession(
+      await ref
+          .read(activeWorkoutRepositoryProvider)
+          .finishWorkoutSession(
             sessionId: details.session.id,
             sessionNotes: notes,
           );
@@ -115,9 +119,7 @@ class ActiveWorkoutScreen extends ConsumerWidget {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sesi latihan berhasil disimpan! 💪'),
-          ),
+          const SnackBar(content: Text('Sesi latihan berhasil disimpan! 💪')),
         );
       }
     }
@@ -179,9 +181,8 @@ class ActiveWorkoutScreen extends ConsumerWidget {
               children: [
                 Text(
                   sessionTitle,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Row(
                   children: [
@@ -292,7 +293,7 @@ class ActiveWorkoutScreen extends ConsumerWidget {
                           final bundle = details.exercises[index];
                           final isSupersetFocused =
                               timerState.nextSupersetExerciseId ==
-                                  bundle.sessionExercise.id;
+                              bundle.sessionExercise.id;
 
                           return _ActiveExerciseCard(
                             sessionDetails: details,
@@ -307,9 +308,8 @@ class ActiveWorkoutScreen extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, _) => Scaffold(
         body: Center(child: Text('Gagal memuat sesi latihan: $err')),
       ),
@@ -348,20 +348,16 @@ class _IdleWorkoutLauncherView extends ConsumerWidget {
                   Text(
                     'Siap Mulai Latihan?',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Pilih lokasi gym Anda untuk melacak beban, RPE, dan waktu istirahat nyata per mesin gym.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                        ),
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -379,9 +375,8 @@ class _IdleWorkoutLauncherView extends ConsumerWidget {
           const SizedBox(height: 20),
           Text(
             'Atau Mulai dari Workout Plan',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           plansAsync.when(
@@ -475,9 +470,9 @@ class _SessionElapsedClockState extends State<_SessionElapsedClock> {
     return Text(
       '• ⏱ $formatted',
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
+        color: Theme.of(context).colorScheme.primary,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 }
@@ -494,14 +489,19 @@ class _ActiveExerciseCard extends ConsumerWidget {
   final bool isSupersetFocused;
 
   Future<void> _openMediaSheet(BuildContext context) async {
+    final machine = bundle.selectedMachine;
+    final machineLabel = machine != null
+        ? (machine.brandName ?? bundle.exercise.equipmentCategory.label)
+        : null;
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (ctx) => DraggableScrollableSheet(
         expand: false,
-        initialChildSize: 0.7,
-        maxChildSize: 0.92,
+        initialChildSize: 0.76,
+        maxChildSize: 0.94,
         builder: (_, scrollController) => SingleChildScrollView(
           controller: scrollController,
           padding: const EdgeInsets.all(16),
@@ -511,11 +511,24 @@ class _ActiveExerciseCard extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      bundle.exercise.name,
-                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bundle.exercise.name,
+                          style: Theme.of(ctx).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          machineLabel != null
+                              ? 'Alat Terpilih: $machineLabel (${machine!.weightUnit.label})'
+                              : 'Media Umum (Pilih/daftarkan alat di kartu untuk menyimpan media khusus merk mesin)',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(ctx).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
                           ),
+                        ),
+                      ],
                     ),
                   ),
                   IconButton(
@@ -524,8 +537,12 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              ExerciseMediaGallery(exerciseId: bundle.exercise.id),
+              const Divider(height: 20),
+              ExerciseMediaGallery(
+                exerciseId: bundle.exercise.id,
+                gymMachineId: machine?.id,
+                machineTitle: machineLabel,
+              ),
             ],
           ),
         ),
@@ -592,9 +609,9 @@ class _ActiveExerciseCard extends ConsumerWidget {
                     child: Text(
                       bundle.supersetBadge!,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onTertiaryContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        color: colorScheme.onTertiaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 Expanded(
@@ -603,15 +620,13 @@ class _ActiveExerciseCard extends ConsumerWidget {
                     children: [
                       Text(
                         exercise.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       Text(
                         '${exercise.primaryMuscleGroup.label} (${exercise.muscleSizeCategory.shortLabel}) • ${exercise.exerciseType.label}',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -677,9 +692,7 @@ class _ActiveExerciseCard extends ConsumerWidget {
                             machine != null
                                 ? 'Alat: ${machine.brandName ?? exercise.equipmentCategory.label}'
                                 : 'Belum ada mesin terdaftar di gym ini — Ketuk untuk Quick Register',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelMedium
+                            style: Theme.of(context).textTheme.labelMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -694,9 +707,7 @@ class _ActiveExerciseCard extends ConsumerWidget {
                           ),
                           child: Text(
                             weightUnit.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
+                            style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
                                   color: colorScheme.onPrimaryContainer,
                                   fontWeight: FontWeight.bold,
@@ -713,9 +724,9 @@ class _ActiveExerciseCard extends ConsumerWidget {
                       Text(
                         '📌 ${machine.pinnedNotes}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ],
@@ -742,7 +753,8 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   const Expanded(
                     flex: 3,
                     child: Text(
-                      'PREVIOUS (KETUK SALIN)',
+                      'HISTORI ALAT',
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -754,6 +766,7 @@ class _ActiveExerciseCard extends ConsumerWidget {
                     child: Text(
                       _inputColumnsHeader(exercise.exerciseType, weightUnit),
                       textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -763,7 +776,7 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   const SizedBox(
                     width: 66,
                     child: Text(
-                      'RPE/SPOT',
+                      'RPE',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 11,
@@ -771,10 +784,7 @@ class _ActiveExerciseCard extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(
-                    width: 34,
-                    child: Icon(Icons.check, size: 15),
-                  ),
+                  const SizedBox(width: 34, child: Icon(Icons.check, size: 15)),
                 ],
               ),
             ),
@@ -817,7 +827,9 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   TextButton.icon(
                     onPressed: () {
                       final lastSet = bundle.sets.last;
-                      ref.read(activeWorkoutRepositoryProvider).addSet(
+                      ref
+                          .read(activeWorkoutRepositoryProvider)
+                          .addSet(
                             sessionExerciseId: bundle.sessionExercise.id,
                             muscleSizeCategory: exercise.muscleSizeCategory,
                             customExerciseRestSeconds:
@@ -920,8 +932,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
       ExerciseType.weighted_bodyweight ||
       ExerciseType.assisted_bodyweight ||
       ExerciseType.duration_weight ||
-      ExerciseType.weight_distance =>
-        _formatDouble(s.weight),
+      ExerciseType.weight_distance => _formatDouble(s.weight),
       ExerciseType.bodyweight_reps => s.reps?.toString() ?? '',
       ExerciseType.duration => s.durationSeconds?.toString() ?? '',
       ExerciseType.distance_duration => _formatDouble(s.distanceMeters),
@@ -933,11 +944,9 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
     return switch (widget.bundle.exercise.exerciseType) {
       ExerciseType.weight_reps ||
       ExerciseType.weighted_bodyweight ||
-      ExerciseType.assisted_bodyweight =>
-        s.reps?.toString() ?? '',
+      ExerciseType.assisted_bodyweight => s.reps?.toString() ?? '',
       ExerciseType.duration_weight ||
-      ExerciseType.distance_duration =>
-        s.durationSeconds?.toString() ?? '',
+      ExerciseType.distance_duration => s.durationSeconds?.toString() ?? '',
       ExerciseType.weight_distance => _formatDouble(s.distanceMeters),
       ExerciseType.bodyweight_reps || ExerciseType.duration => '',
     };
@@ -993,7 +1002,9 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
     final prev = widget.previousSet;
     if (prev == null) return;
 
-    await ref.read(activeWorkoutRepositoryProvider).updateSet(
+    await ref
+        .read(activeWorkoutRepositoryProvider)
+        .updateSet(
           setId: widget.workoutSet.id,
           weight: Value(prev.weight),
           reps: Value(prev.reps),
@@ -1060,10 +1071,9 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
     }
 
     final newType = SetType.values.byName(selected);
-    await ref.read(activeWorkoutRepositoryProvider).updateSet(
-          setId: widget.workoutSet.id,
-          setType: newType,
-        );
+    await ref
+        .read(activeWorkoutRepositoryProvider)
+        .updateSet(setId: widget.workoutSet.id, setType: newType);
   }
 
   Future<void> _openRpeAndSpotterPicker() async {
@@ -1071,7 +1081,8 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _RpeAssistanceRestPickerSheet(workoutSet: widget.workoutSet),
+      builder: (_) =>
+          _RpeAssistanceRestPickerSheet(workoutSet: widget.workoutSet),
     );
   }
 
@@ -1084,7 +1095,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
     if (isCompleting) {
       final elapsedActualRest =
           widget.workoutSet.actualRestSeconds ??
-              restController.computeActualRestSeconds();
+          restController.computeActualRestSeconds();
 
       final resolvedTargetRest = await restController.onSetCompleted(
         sessionDetails: widget.sessionDetails,
@@ -1101,10 +1112,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
         actualRestSeconds: elapsedActualRest,
       );
     } else {
-      await repo.completeSet(
-        setId: widget.workoutSet.id,
-        isCompleted: false,
-      );
+      await repo.completeSet(setId: widget.workoutSet.id, isCompleted: false);
     }
   }
 
@@ -1113,17 +1121,14 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
     final s = widget.workoutSet;
     final prev = widget.previousSet;
     final exType = widget.bundle.exercise.exerciseType;
-    final isSingleInput = exType == ExerciseType.bodyweight_reps ||
+    final isSingleInput =
+        exType == ExerciseType.bodyweight_reps ||
         exType == ExerciseType.duration;
     final isSubDrop = s.parentSetId != null;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      margin: EdgeInsets.only(
-        top: 4,
-        bottom: 4,
-        left: isSubDrop ? 16 : 0,
-      ),
+      margin: EdgeInsets.only(top: 4, bottom: 4, left: isSubDrop ? 16 : 0),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: s.isCompleted
@@ -1166,12 +1171,13 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                     child: Text(
                       prev != null ? prev.formatInline(exType) : '—',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: prev?.isFromOtherGym == true
-                                ? colorScheme.tertiary
-                                : colorScheme.onSurfaceVariant,
-                            fontWeight:
-                                prev != null ? FontWeight.w600 : FontWeight.normal,
-                          ),
+                        color: prev?.isFromOtherGym == true
+                            ? colorScheme.tertiary
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: prev != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
                     ),
                   ),
                 ),
@@ -1216,8 +1222,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                           height: 36,
                           child: TextField(
                             controller: _secondaryInputCtrl,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
+                            keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                             textAlign: TextAlign.center,
@@ -1289,8 +1294,8 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                                 fontSize: 9,
                                 color:
                                     s.assistanceType == AssistanceType.assisted
-                                        ? colorScheme.onErrorContainer
-                                        : colorScheme.onSurfaceVariant,
+                                    ? colorScheme.onErrorContainer
+                                    : colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -1321,10 +1326,8 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                 child: Text(
                   '⏱ Actual Rest: ${s.actualRestSeconds != null ? formatCompactDuration(s.actualRestSeconds!) : "0s"} '
                   '(Target: ${formatCompactDuration(s.targetRestSeconds ?? 180)}) • Ketuk untuk ubah',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontSize: 10,
-                        color: colorScheme.primary,
-                      ),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(fontSize: 10, color: colorScheme.primary),
                 ),
               ),
             ),
@@ -1348,26 +1351,18 @@ class _SetBadgeAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bgColor, textColor, text) = switch (setType) {
-      SetType.warmup => (
-          Colors.amber.shade700,
-          Colors.white,
-          'W',
-        ),
+      SetType.warmup => (Colors.amber.shade700, Colors.white, 'W'),
       SetType.normal => (
-          Theme.of(context).colorScheme.secondaryContainer,
-          Theme.of(context).colorScheme.onSecondaryContainer,
-          '$setNumber',
-        ),
+        Theme.of(context).colorScheme.secondaryContainer,
+        Theme.of(context).colorScheme.onSecondaryContainer,
+        '$setNumber',
+      ),
       SetType.dropset => (
-          Colors.deepPurple.shade600,
-          Colors.white,
-          isSubDrop ? '↳D' : 'D',
-        ),
-      SetType.failure => (
-          Colors.red.shade700,
-          Colors.white,
-          'F',
-        ),
+        Colors.deepPurple.shade600,
+        Colors.white,
+        isSubDrop ? '↳D' : 'D',
+      ),
+      SetType.failure => (Colors.red.shade700, Colors.white, 'F'),
     };
 
     return Container(
@@ -1446,7 +1441,9 @@ class _RpeAssistanceRestPickerSheetState
     final actualText = _actualRestCtrl.text.trim();
     final targetText = _targetRestCtrl.text.trim();
 
-    await ref.read(activeWorkoutRepositoryProvider).updateSet(
+    await ref
+        .read(activeWorkoutRepositoryProvider)
+        .updateSet(
           setId: widget.workoutSet.id,
           rpe: Value(_selectedRpe),
           assistanceType: _selectedAssistance,
@@ -1482,9 +1479,8 @@ class _RpeAssistanceRestPickerSheetState
                 Expanded(
                   child: Text(
                     'RPE, Spotter & Waktu Istirahat (Set #${widget.workoutSet.setNumber})',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -1537,10 +1533,8 @@ class _RpeAssistanceRestPickerSheetState
                   onTap: () => setState(() => _selectedAssistance = type),
                   leading: Icon(switch (type) {
                     AssistanceType.solo => Icons.person_outline,
-                    AssistanceType.spotted_no_touch =>
-                      Icons.shield_outlined,
-                    AssistanceType.assisted =>
-                      Icons.supervisor_account_rounded,
+                    AssistanceType.spotted_no_touch => Icons.shield_outlined,
+                    AssistanceType.assisted => Icons.supervisor_account_rounded,
                   }),
                   title: Text(
                     type.label,
@@ -1684,9 +1678,8 @@ class _QuickMachineSelectorSheetState
                 Expanded(
                   child: Text(
                     'Alat untuk ${widget.bundle.exercise.name}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -1717,8 +1710,9 @@ class _QuickMachineSelectorSheetState
                           widget.bundle.exercise.equipmentCategory.label,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle:
-                        m.pinnedNotes != null ? Text('📌 ${m.pinnedNotes}') : null,
+                    subtitle: m.pinnedNotes != null
+                        ? Text('📌 ${m.pinnedNotes}')
+                        : null,
                     trailing: Chip(
                       label: Text(m.weightUnit.label),
                       visualDensity: VisualDensity.compact,
@@ -1731,16 +1725,17 @@ class _QuickMachineSelectorSheetState
 
             Text(
               'Quick Register Alat Baru di $gymName',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _brandCtrl,
               decoration: const InputDecoration(
-                labelText: 'Merk / Nama Alat',
-                hintText: 'Contoh: Life Fitness, Panatta, Kabel #2',
+                labelText: 'Merk & Identitas Mesin *',
+                hintText: 'Contoh: Hoist, Technogym #1 (Pojok), Technogym #2',
+                helperText: 'Foto, video, working set, dan 1RM akan diikat khusus ke mesin ini.',
+                helperMaxLines: 2,
                 isDense: true,
                 border: OutlineInputBorder(),
               ),
@@ -1805,10 +1800,12 @@ class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.allExercises.where((e) {
-      if (_search.trim().isEmpty) return true;
-      return e.name.toLowerCase().contains(_search.trim().toLowerCase());
-    }).toList(growable: false);
+    final filtered = widget.allExercises
+        .where((e) {
+          if (_search.trim().isEmpty) return true;
+          return e.name.toLowerCase().contains(_search.trim().toLowerCase());
+        })
+        .toList(growable: false);
 
     final lastExercise = widget.existingExercises.isNotEmpty
         ? widget.existingExercises.last
@@ -1823,9 +1820,8 @@ class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
               Expanded(
                 child: Text(
                   'Tambah Gerakan ke Sesi',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               IconButton(
@@ -1842,9 +1838,8 @@ class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
                   setState(() => _pairWithLastExercise = v ?? false),
               title: Text(
                 'Gabungkan Superset dengan "${lastExercise.exercise.name}"',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           TextField(
@@ -1878,12 +1873,10 @@ class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
                     if (_pairWithLastExercise && lastExercise != null) {
                       supersetId =
                           lastExercise.sessionExercise.supersetGroupId ??
-                              'ss_${lastExercise.sessionExercise.id.substring(0, 6)}';
+                          'ss_${lastExercise.sessionExercise.id.substring(0, 6)}';
                     }
-                    Navigator.of(context).pop((
-                      exercise: ex,
-                      supersetGroupId: supersetId,
-                    ));
+                    Navigator.of(context)
+                        .pop((exercise: ex, supersetGroupId: supersetId));
                   },
                 );
               },

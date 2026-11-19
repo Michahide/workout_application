@@ -105,44 +105,59 @@ class WorkoutPlansScreen extends ConsumerWidget {
                     : colorScheme.primaryContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              hasActiveSession
-                                  ? 'Sesi Latihan Sedang Berlangsung'
-                                  : 'Latihan Bebas (Empty Workout)',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: hasActiveSession
-                                        ? colorScheme.onTertiaryContainer
-                                        : colorScheme.onPrimaryContainer,
-                                  ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            hasActiveSession
+                                ? Icons.play_circle_fill_rounded
+                                : Icons.flash_on_rounded,
+                            color: hasActiveSession
+                                ? colorScheme.onTertiaryContainer
+                                : colorScheme.onPrimaryContainer,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  hasActiveSession
+                                      ? 'Sesi Latihan Sedang Berlangsung'
+                                      : 'Latihan Bebas (Empty Workout)',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: hasActiveSession
+                                            ? colorScheme.onTertiaryContainer
+                                            : colorScheme.onPrimaryContainer,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  hasActiveSession
+                                      ? 'Ketuk tombol di bawah untuk kembali mencatat set pada sesi aktif Anda.'
+                                      : 'Mulai sesi latihan langsung di gym pilihan Anda tanpa template rutinitas.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: hasActiveSession
+                                            ? colorScheme.onTertiaryContainer
+                                            : colorScheme.onPrimaryContainer,
+                                      ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              hasActiveSession
-                                  ? 'Ketuk untuk kembali mencatat set pada sesi aktif Anda.'
-                                  : 'Mulai latihan langsung tanpa template rutinitas.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: hasActiveSession
-                                        ? colorScheme.onTertiaryContainer
-                                        : colorScheme.onPrimaryContainer,
-                                  ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(height: 14),
                       FilledButton.icon(
                         onPressed: () {
                           if (hasActiveSession) {
@@ -153,13 +168,13 @@ class WorkoutPlansScreen extends ConsumerWidget {
                         },
                         icon: Icon(
                           hasActiveSession
-                              ? Icons.play_circle_fill_rounded
-                              : Icons.flash_on_rounded,
+                              ? Icons.play_arrow_rounded
+                              : Icons.add_circle_outline_rounded,
                         ),
                         label: Text(
                           hasActiveSession
-                              ? 'Resume'
-                              : 'Start Empty Workout',
+                              ? 'Lanjutkan Sesi Aktif (Resume)'
+                              : 'Mulai Latihan Bebas (Empty Workout)',
                         ),
                       ),
                     ],

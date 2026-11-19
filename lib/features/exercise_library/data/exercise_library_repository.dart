@@ -175,14 +175,34 @@ class ExerciseLibraryRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // EXERCISE MEDIA (WITH STRICT 4 PHOTOS & 3 VIDEOS VALIDATION)
+  // EXERCISE MEDIA (SCOPED PER GYM MACHINE, WITH STRICT 4 PHOTOS & 3 VIDEOS LIMIT)
   // ---------------------------------------------------------------------------
 
-  /// Watches all active (non-deleted) media attachments for [exerciseId].
-  Stream<List<ExerciseMediaData>> watchMediaForExercise(String exerciseId) {
+  Expression<bool> _mediaScopePredicate(
+    $ExerciseMediaTable tbl, {
+    required String exerciseId,
+    required String? gymMachineId,
+  }) {
+    final base = tbl.exerciseId.equals(exerciseId) & tbl.deletedAt.isNull();
+    if (gymMachineId != null && gymMachineId.isNotEmpty) {
+      return base & tbl.gymMachineId.equals(gymMachineId);
+    }
+    return base & tbl.gymMachineId.isNull();
+  }
+
+  /// Watches all active (non-deleted) media attachments for [exerciseId]
+  /// and specific [gymMachineId] (or general exercise media if [gymMachineId] is null).
+  Stream<List<ExerciseMediaData>> watchMediaForExercise(
+    String exerciseId, {
+    String? gymMachineId,
+  }) {
     final query = _db.select(_db.exerciseMedia)
       ..where(
-        (tbl) => tbl.exerciseId.equals(exerciseId) & tbl.deletedAt.isNull(),
+        (tbl) => _mediaScopePredicate(
+          tbl,
+          exerciseId: exerciseId,
+          gymMachineId: gymMachineId,
+        ),
       )
       ..orderBy([
         (tbl) => OrderingTerm.asc(tbl.sortOrder),
@@ -191,18 +211,22 @@ class ExerciseLibraryRepository {
     return query.watch();
   }
 
-  /// Validates that the exercise has not reached the active limit for [mediaType]
+  /// Validates that the machine/exercise has not reached the active limit for [mediaType]
   /// (4 photos or 3 videos) before picking/compressing media.
   Future<void> ensureCanAddMedia({
     required String exerciseId,
+    String? gymMachineId,
     required MediaType mediaType,
   }) async {
     final activeList = await (_db.select(_db.exerciseMedia)
           ..where(
             (tbl) =>
-                tbl.exerciseId.equals(exerciseId) &
-                tbl.mediaType.equals(mediaType.name) &
-                tbl.deletedAt.isNull(),
+                _mediaScopePredicate(
+                  tbl,
+                  exerciseId: exerciseId,
+                  gymMachineId: gymMachineId,
+                ) &
+                tbl.mediaType.equals(mediaType.name),
           ))
         .get();
 
@@ -213,16 +237,17 @@ class ExerciseLibraryRepository {
     if (activeList.length >= maxAllowed) {
       final label = mediaType == MediaType.photo ? 'foto' : 'video';
       throw ExerciseMediaLimitException(
-        'Batas maksimal $maxAllowed $label per gerakan telah tercapai. '
+        'Batas maksimal $maxAllowed $label untuk alat/gerakan ini telah tercapai. '
         'Hapus salah satu $label terlebih dahulu.',
       );
     }
   }
 
-  /// Inserts a compressed photo or video attachment for [exerciseId] after
-  /// enforcing the strict 4-photo / 3-video active limit inside a transaction.
+  /// Inserts a compressed photo or video attachment for [exerciseId] and [gymMachineId]
+  /// after enforcing the strict 4-photo / 3-video active limit inside a transaction.
   Future<String> addExerciseMedia({
     required String exerciseId,
+    String? gymMachineId,
     required MediaType mediaType,
     required String localPath,
     String? thumbnailLocalPath,
@@ -233,9 +258,12 @@ class ExerciseLibraryRepository {
       final activeOfType = await (_db.select(_db.exerciseMedia)
             ..where(
               (tbl) =>
-                  tbl.exerciseId.equals(exerciseId) &
-                  tbl.mediaType.equals(mediaType.name) &
-                  tbl.deletedAt.isNull(),
+                  _mediaScopePredicate(
+                    tbl,
+                    exerciseId: exerciseId,
+                    gymMachineId: gymMachineId,
+                  ) &
+                  tbl.mediaType.equals(mediaType.name),
             )
             ..orderBy([(tbl) => OrderingTerm.asc(tbl.sortOrder)]))
           .get();
@@ -247,7 +275,7 @@ class ExerciseLibraryRepository {
       if (activeOfType.length >= maxAllowed) {
         final label = mediaType == MediaType.photo ? 'foto' : 'video';
         throw ExerciseMediaLimitException(
-          'Batas maksimal $maxAllowed $label per gerakan telah tercapai. '
+          'Batas maksimal $maxAllowed $label untuk alat/gerakan ini telah tercapai. '
           'Hapus salah satu $label terlebih dahulu.',
         );
       }
@@ -266,6 +294,11 @@ class ExerciseLibraryRepository {
             ExerciseMediaCompanion.insert(
               id: Value(id),
               exerciseId: exerciseId,
+              gymMachineId: Value(
+                gymMachineId != null && gymMachineId.isNotEmpty
+                    ? gymMachineId
+                    : null,
+              ),
               mediaType: mediaType,
               sortOrder: Value(nextSortOrder),
               localPath: localPath,

@@ -71,7 +71,7 @@ final class ExerciseMediaControllerProvider
         $NotifierProvider<ExerciseMediaController, ExerciseMediaUploadState> {
   ExerciseMediaControllerProvider._({
     required ExerciseMediaControllerFamily super.from,
-    required String super.argument,
+    required (String, String?) super.argument,
   }) : super(
          retry: null,
          name: r'exerciseMediaControllerProvider',
@@ -87,7 +87,7 @@ final class ExerciseMediaControllerProvider
   String toString() {
     return r'exerciseMediaControllerProvider'
         ''
-        '($argument)';
+        '$argument';
   }
 
   @$internal
@@ -115,7 +115,7 @@ final class ExerciseMediaControllerProvider
 }
 
 String _$exerciseMediaControllerHash() =>
-    r'a8d5354ec41aeec687b1b5cd95aeeef125901b00';
+    r'929f17ed397d12c2bf62c126afbede842a5a34b3';
 
 final class ExerciseMediaControllerFamily extends $Family
     with
@@ -124,7 +124,7 @@ final class ExerciseMediaControllerFamily extends $Family
           ExerciseMediaUploadState,
           ExerciseMediaUploadState,
           ExerciseMediaUploadState,
-          String
+          (String, String?)
         > {
   ExerciseMediaControllerFamily._()
     : super(
@@ -135,8 +135,13 @@ final class ExerciseMediaControllerFamily extends $Family
         isAutoDispose: true,
       );
 
-  ExerciseMediaControllerProvider call(String exerciseId) =>
-      ExerciseMediaControllerProvider._(argument: exerciseId, from: this);
+  ExerciseMediaControllerProvider call(
+    String exerciseId, [
+    String? gymMachineId,
+  ]) => ExerciseMediaControllerProvider._(
+    argument: (exerciseId, gymMachineId),
+    from: this,
+  );
 
   @override
   String toString() => r'exerciseMediaControllerProvider';
@@ -144,10 +149,11 @@ final class ExerciseMediaControllerFamily extends $Family
 
 abstract class _$ExerciseMediaController
     extends $Notifier<ExerciseMediaUploadState> {
-  late final _$args = ref.$arg as String;
-  String get exerciseId => _$args;
+  late final _$args = ref.$arg as (String, String?);
+  String get exerciseId => _$args.$1;
+  String? get gymMachineId => _$args.$2;
 
-  ExerciseMediaUploadState build(String exerciseId);
+  ExerciseMediaUploadState build(String exerciseId, [String? gymMachineId]);
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
@@ -161,6 +167,6 @@ abstract class _$ExerciseMediaController
               Object?,
               Object?
             >;
-    return element.handleCreate(ref, () => build(_$args));
+    return element.handleCreate(ref, () => build(_$args.$1, _$args.$2));
   }
 }

@@ -314,28 +314,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                       ),
                       const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton.tonalIcon(
-                              onPressed:
-                                  _isBackupBusy ? null : _handleExportBackup,
-                              icon: const Icon(Icons.upload_file_outlined),
-                              label: const Text('Export Backup (.zip)'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed:
-                                  _isBackupBusy ? null : _handleRestoreBackup,
-                              icon: const Icon(
-                                Icons.settings_backup_restore_rounded,
-                              ),
-                              label: const Text('Restore (.zip)'),
-                            ),
-                          ),
-                        ],
+                      FilledButton.tonalIcon(
+                        onPressed: _isBackupBusy ? null : _handleExportBackup,
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Text('Export Full Backup (.zip)'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _isBackupBusy ? null : _handleRestoreBackup,
+                        icon: const Icon(
+                          Icons.settings_backup_restore_rounded,
+                        ),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Text('Restore dari File Backup (.zip)'),
+                        ),
                       ),
                     ],
                   ),
@@ -525,50 +521,57 @@ class _CloudSyncStatusCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final dateFmt = DateFormat('d MMM yyyy, HH:mm:ss');
 
-    final (statusLabel, badgeColor, badgeTextColor, icon) =
+    final (shortBadge, statusSubtitle, badgeColor, badgeTextColor, icon) =
         switch (syncState.phase) {
       CloudSyncPhase.uploadingMedia => (
-          'Syncing (Uploading Media...)',
+          'Syncing...',
+          'Mengunggah foto & video latihan ke server...',
           colorScheme.secondaryContainer,
           colorScheme.onSecondaryContainer,
           Icons.cloud_upload_outlined,
         ),
       CloudSyncPhase.pushingOutbox => (
-          'Syncing (Pushing Outbox...)',
+          'Syncing...',
+          'Mengirim $pendingOutboxCount perubahan lokal (Outbox)...',
           colorScheme.secondaryContainer,
           colorScheme.onSecondaryContainer,
           Icons.sync_rounded,
         ),
       CloudSyncPhase.pullingDelta => (
-          'Syncing (Pulling Delta...)',
+          'Syncing...',
+          'Mengambil pembaruan terbaru dari cloud...',
           colorScheme.secondaryContainer,
           colorScheme.onSecondaryContainer,
           Icons.cloud_download_outlined,
         ),
       CloudSyncPhase.offline => (
-          'Offline ($pendingOutboxCount items pending)',
+          'Offline',
+          'Perangkat offline ($pendingOutboxCount item tersimpan di lokal)',
           Colors.amber.shade800,
           Colors.white,
           Icons.cloud_off_rounded,
         ),
       CloudSyncPhase.error => (
-          'Sync Error ($pendingOutboxCount pending)',
+          'Sync Error',
+          '$pendingOutboxCount perubahan aman tersimpan di antrean lokal',
           colorScheme.errorContainer,
           colorScheme.onErrorContainer,
           Icons.error_outline_rounded,
         ),
       CloudSyncPhase.synced => (
+          'Synced',
           pendingOutboxCount == 0
-              ? 'Synced'
-              : 'Synced ($pendingOutboxCount new items pending)',
+              ? 'Seluruh data lokal telah tersinkronisasi'
+              : '$pendingOutboxCount perubahan baru siap di-sync',
           Colors.green.shade700,
           Colors.white,
           Icons.cloud_done_rounded,
         ),
       CloudSyncPhase.idle => (
+          syncState.isConfigured ? 'Siap Sync' : 'Mode Offline',
           syncState.isConfigured
-              ? 'Ready ($pendingOutboxCount items pending)'
-              : 'Offline-Only ($pendingOutboxCount items pending)',
+              ? '$pendingOutboxCount perubahan lokal menunggu sinkronisasi'
+              : 'Data tersimpan 100% di perangkat ($pendingOutboxCount item)',
           colorScheme.surfaceContainerHighest,
           colorScheme.onSurfaceVariant,
           Icons.cloud_queue_rounded,
@@ -582,6 +585,7 @@ class _CloudSyncStatusCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Icon(icon, color: colorScheme.primary),
                 const SizedBox(width: 8),
@@ -593,6 +597,7 @@ class _CloudSyncStatusCard extends StatelessWidget {
                         ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -603,7 +608,7 @@ class _CloudSyncStatusCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    statusLabel,
+                    shortBadge,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: badgeTextColor,
                           fontWeight: FontWeight.bold,
@@ -611,6 +616,13 @@ class _CloudSyncStatusCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              statusSubtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 12),
 

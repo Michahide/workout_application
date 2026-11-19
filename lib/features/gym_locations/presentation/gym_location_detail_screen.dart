@@ -3,11 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/app_database.dart';
-import '../../../core/database/domain_labels.dart';
-import '../../../core/database/tables.dart';
 import '../data/gym_location_repository.dart';
 import 'gym_locations_providers.dart';
 import 'gym_machine_form_sheet.dart';
+import 'gym_machine_profile_card.dart';
 
 class GymLocationDetailScreen extends ConsumerWidget {
   const GymLocationDetailScreen({super.key, required this.gymId});
@@ -196,9 +195,11 @@ class GymLocationDetailScreen extends ConsumerWidget {
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final item = machines[index];
-                        return _GymMachineCard(
+                        return GymMachineProfileCard(
                           item: item,
-                          onTapExercise: () =>
+                          showExerciseTitle: true,
+                          showGymLocationName: false,
+                          onTapHeader: () =>
                               context.push('/exercises/${item.exercise.id}'),
                           onEdit: () => _openMachineForm(
                             context,
@@ -228,143 +229,6 @@ class GymLocationDetailScreen extends ConsumerWidget {
         onPressed: () => _openMachineForm(context),
         icon: const Icon(Icons.add),
         label: const Text('Tambah Alat'),
-      ),
-    );
-  }
-}
-
-class _GymMachineCard extends StatelessWidget {
-  const _GymMachineCard({
-    required this.item,
-    required this.onTapExercise,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final GymMachineWithDetails item;
-  final VoidCallback onTapExercise;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final machine = item.machine;
-    final exercise = item.exercise;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    final badgeColor = switch (machine.weightUnit) {
-      WeightUnit.KG => colorScheme.primaryContainer,
-      WeightUnit.LBS => colorScheme.tertiaryContainer,
-      WeightUnit.STACK_NUMBER => colorScheme.secondaryContainer,
-    };
-
-    final badgeTextColor = switch (machine.weightUnit) {
-      WeightUnit.KG => colorScheme.onPrimaryContainer,
-      WeightUnit.LBS => colorScheme.onTertiaryContainer,
-      WeightUnit.STACK_NUMBER => colorScheme.onSecondaryContainer,
-    };
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTapExercise,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          exercise.name,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          machine.brandName != null
-                              ? '${machine.brandName} • ${exercise.primaryMuscleGroup.label}'
-                              : '${exercise.equipmentCategory.label} • ${exercise.primaryMuscleGroup.label}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: badgeColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      machine.weightUnit.label,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: badgeTextColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Edit Alat',
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 20),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Hapus Alat',
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                  ),
-                ],
-              ),
-              if (machine.pinnedNotes != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.push_pin_rounded,
-                        size: 16,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          machine.pinnedNotes!,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -102,39 +102,43 @@ class ExerciseProgressionChart extends StatelessWidget {
                 onSelectionChanged: (sel) => onMetricChanged(sel.first),
               ),
             ),
+            const SizedBox(height: 10),
+
+            // Full-width Metric Title
+            Text(
+              metric.fullTitle,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
             const SizedBox(height: 8),
 
-            // Subtitle & Date Range Chips
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    metric.fullTitle,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-                Wrap(
-                  spacing: 4,
-                  children: AnalyticsDateRange.values.map((range) {
-                    final selected = range == dateRange;
-                    return ChoiceChip(
+            // Full-width Date Range Chips Row
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: AnalyticsDateRange.values.map((range) {
+                  final selected = range == dateRange;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
                       label: Text(
                         range.shortLabel,
-                        style: const TextStyle(fontSize: 11),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       visualDensity: VisualDensity.compact,
                       selected: selected,
                       onSelected: (_) => onDateRangeChanged(range),
-                    );
-                  }).toList(),
-                ),
-              ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             if (validEntries.isEmpty)
               SizedBox(
@@ -164,47 +168,75 @@ class ExerciseProgressionChart extends StatelessWidget {
               SizedBox(
                 height: 230,
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 12, top: 8),
+                  padding: const EdgeInsets.only(right: 14, top: 8),
                   child: _buildLineChart(context, validEntries),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Legend for Solo vs Assisted dots
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      shape: BoxShape.circle,
+              const SizedBox(height: 12),
+              // Responsive Wrap Legend for Solo vs Assisted dots
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.45,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 16,
+                  runSpacing: 6,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Solo / Spotted (Murni)',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Solo / Spotted (Unassisted)',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  const SizedBox(width: 16),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.orange.shade800,
-                        width: 2.5,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.orange.shade800,
+                              width: 2.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Assisted (Dibantu Spotter)',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Assisted by Spotter',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ],

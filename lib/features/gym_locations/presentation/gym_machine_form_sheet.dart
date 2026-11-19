@@ -210,11 +210,18 @@ class _GymMachineFormSheetState extends ConsumerState<GymMachineFormSheet> {
                 controller: _brandController,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Merk / Nama Alat (Opsional)',
-                  hintText: 'Contoh: Hammer Strength, Life Fitness, Technogym',
+                  labelText: 'Merk & Identitas Mesin *',
+                  hintText:
+                      'Contoh: Hoist, Technogym Mesin #1 (Pojok), Technogym Mesin #2',
+                  helperText:
+                      'Beri penanda unik jika ada >1 mesin bermerk sama karena rasio katrol/beban bisa berbeda.',
+                  helperMaxLines: 2,
                   prefixIcon: Icon(Icons.precision_manufacturing_outlined),
                   border: OutlineInputBorder(),
                 ),
+                validator: (val) => (val == null || val.trim().isEmpty)
+                    ? 'Masukkan merk atau nama pembeda mesin'
+                    : null,
               ),
               const SizedBox(height: 16),
 
