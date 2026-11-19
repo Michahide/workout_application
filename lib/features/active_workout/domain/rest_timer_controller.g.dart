@@ -42,7 +42,7 @@ final class RestTimerControllerProvider
 }
 
 String _$restTimerControllerHash() =>
-    r'6a04308476175acdf34d51a2570dcc9e4938cc14';
+    r'bbd240956cd07dee4c1b9ef6da80d0038b0e8dc4';
 
 abstract class _$RestTimerController extends $Notifier<RestTimerState> {
   RestTimerState build();

@@ -4,8 +4,11 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
+import '../../../core/sync/hevy_csv_import_service.dart';
 import '../../../core/sync/local_backup_service.dart';
 import '../../../core/sync/sync_engine.dart';
+import '../../gym_locations/data/gym_location_repository.dart';
+import '../../gym_locations/presentation/gym_locations_providers.dart';
 import '../data/app_settings_repository.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -17,6 +20,186 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isBackupBusy = false;
+  bool _isHevyImportBusy = false;
+
+  Future<String?> _pickTargetGymForHevyImport() async {
+    final gyms = await ref
+        .read(gymLocationRepositoryProvider)
+        .getGymLocations();
+    if (!mounted) return null;
+
+    String? selectedGymId = gyms.isNotEmpty ? gyms.first.id : null;
+    final newGymCtrl = TextEditingController();
+
+    final result = await showModalBottomSheet<({bool proceed, String? gymId})>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Pilih Lokasi Gym untuk Data Hevy',
+                      style: Theme.of(ctx).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Seluruh histori sesi latihan dan alat/mesin dari CSV Hevy akan dihubungkan ke lokasi gym yang Anda pilih di bawah ini.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              if (gyms.isNotEmpty)
+                DropdownButtonFormField<String?>(
+                  initialValue: selectedGymId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Lokasi Gym Terdaftar',
+                    prefixIcon: Icon(Icons.storefront_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    ...gyms.map(
+                      (g) => DropdownMenuItem<String?>(
+                        value: g.id,
+                        child: Text(g.name),
+                      ),
+                    ),
+                    const DropdownMenuItem<String?>(
+                      value: '__NEW__',
+                      child: Text('+ Buat Lokasi Gym Baru...'),
+                    ),
+                  ],
+                  onChanged: (val) => setSheetState(() => selectedGymId = val),
+                ),
+              if (gyms.isEmpty || selectedGymId == '__NEW__') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newGymCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Lokasi Gym Baru *',
+                    hintText: 'Contoh: FTL Gym / Gym Utama',
+                    prefixIcon: Icon(Icons.add_location_alt_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () async {
+                  String? finalGymId = selectedGymId;
+                  if (gyms.isEmpty || selectedGymId == '__NEW__') {
+                    final name = newGymCtrl.text.trim().isEmpty
+                        ? 'Main Gym (Hevy)'
+                        : newGymCtrl.text.trim();
+                    finalGymId = await ref
+                        .read(gymLocationRepositoryProvider)
+                        .createGymLocation(name: name);
+                  }
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop((proceed: true, gymId: finalGymId));
+                  }
+                },
+                icon: const Icon(Icons.download_done_rounded),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Lanjutkan Import Hevy'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    newGymCtrl.dispose();
+    if (result == null || !result.proceed) return null;
+    return result.gymId ?? '';
+  }
+
+  Future<void> _handleImportHevyCsv({required bool useBundledAsset}) async {
+    final chosenGymId = await _pickTargetGymForHevyImport();
+    if (chosenGymId == null) return;
+
+    setState(() => _isHevyImportBusy = true);
+    try {
+      final service = ref.read(hevyCsvImportServiceProvider);
+      final targetGym = chosenGymId.isEmpty ? null : chosenGymId;
+
+      final result = useBundledAsset
+          ? await service.importBundledWorkoutDataCsv(gymLocationId: targetGym)
+          : await service.pickAndImportHevyCsv(gymLocationId: targetGym);
+
+      if (result == null || !mounted) return;
+
+      ref.invalidate(gymLocationsListProvider);
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.green),
+              SizedBox(width: 8),
+              Expanded(child: Text('Import Hevy Selesai!')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '• Sesi Latihan Di-import: ${result.importedSessionsCount} sesi',
+              ),
+              Text('• Total Set Di-import: ${result.importedSetsCount} set'),
+              Text(
+                '• Gerakan Baru Dibuat: ${result.createdExercisesCount} gerakan',
+              ),
+              Text('• Alat Gym Terdaftar: ${result.createdMachinesCount} alat'),
+              Text('• Workout Plans Dibuat: ${result.createdPlansCount} plan'),
+              if (result.skippedDuplicateSessionsCount > 0)
+                Text(
+                  '• Sesi Duplikat Dilewati: ${result.skippedDuplicateSessionsCount} sesi',
+                ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Import CSV Hevy gagal: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isHevyImportBusy = false);
+    }
+  }
 
   Future<void> _saveSettings(
     AppSetting current, {
@@ -26,15 +209,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     int? globalWarmupRestSeconds,
     int? defaultWorkingSetRestSeconds,
   }) async {
-    await ref.read(appSettingsRepositoryProvider).updateSettings(
+    await ref
+        .read(appSettingsRepositoryProvider)
+        .updateSettings(
           useSplitWarmupRest: useSplitWarmupRest ?? current.useSplitWarmupRest,
-          largeMuscleWarmupRestSeconds: largeMuscleWarmupRestSeconds ??
+          largeMuscleWarmupRestSeconds:
+              largeMuscleWarmupRestSeconds ??
               current.largeMuscleWarmupRestSeconds,
-          smallMuscleWarmupRestSeconds: smallMuscleWarmupRestSeconds ??
+          smallMuscleWarmupRestSeconds:
+              smallMuscleWarmupRestSeconds ??
               current.smallMuscleWarmupRestSeconds,
           globalWarmupRestSeconds:
               globalWarmupRestSeconds ?? current.globalWarmupRestSeconds,
-          defaultWorkingSetRestSeconds: defaultWorkingSetRestSeconds ??
+          defaultWorkingSetRestSeconds:
+              defaultWorkingSetRestSeconds ??
               current.defaultWorkingSetRestSeconds,
         );
   }
@@ -133,9 +321,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Expanded(
                   child: Text(
                     'Konfigurasi Self-Hosted Cloud Sync',
-                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(ctx).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 IconButton(
@@ -181,7 +368,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     if (saved == true) {
-      await ref.read(syncControllerProvider.notifier).updateEndpointConfig(
+      await ref
+          .read(syncControllerProvider.notifier)
+          .updateEndpointConfig(
             apiBaseUrl: urlCtrl.text,
             authToken: tokenCtrl.text,
           );
@@ -198,9 +387,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(localBackupServiceProvider).exportFullBackupZip(db);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export backup gagal: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Export backup gagal: $e')));
       }
     } finally {
       if (mounted) setState(() => _isBackupBusy = false);
@@ -238,15 +426,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (restored && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Backup .zip berhasil di-restore! Semua data telah diperbarui.'),
+            content: Text(
+              'Backup .zip berhasil di-restore! Semua data telah diperbarui.',
+            ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore gagal: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restore gagal: $e')));
       }
     } finally {
       if (mounted) setState(() => _isBackupBusy = false);
@@ -261,9 +450,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final pendingCount = pendingOutboxAsync.asData?.value ?? 0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pengaturan & Cloud Sync'),
-      ),
+      appBar: AppBar(title: const Text('Pengaturan & Cloud Sync')),
       body: settingsAsync.when(
         data: (settings) {
           return ListView(
@@ -279,7 +466,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 2. LOCAL BACKUP & RESTORE CARD
+              // 2. IMPORT FROM HEVY (.CSV) CARD
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.table_chart_outlined,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Import Data dari Aplikasi Hevy (.csv)',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Import seluruh riwayat sesi latihan, set (Warmup, Normal, Dropset, RPE), catatan gerakan, beserta Workout Plans (Push/Pull/Leg Day) dari file CSV export Hevy.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (_isHevyImportBusy) ...[
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Sedang meng-import ribuan baris set dari CSV Hevy...',
+                          style: Theme.of(context).textTheme.labelSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        onPressed: _isHevyImportBusy
+                            ? null
+                            : () =>
+                                  _handleImportHevyCsv(useBundledAsset: false),
+                        icon: const Icon(Icons.file_open_outlined),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Text('Pilih File CSV Hevy dari HP (.csv)'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: _isHevyImportBusy
+                            ? null
+                            : () => _handleImportHevyCsv(useBundledAsset: true),
+                        icon: const Icon(Icons.bolt_rounded),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Text(
+                            'Import Langsung workout_data.csv Bawaan',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 3. LOCAL BACKUP & RESTORE CARD
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -296,9 +554,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Expanded(
                             child: Text(
                               'Local Offline Backup & Restore (.zip)',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -308,10 +564,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Text(
                         'Cadangkan seluruh database SQLite beserta seluruh foto & video latihan (.webp / .mp4) ke dalam 1 file .zip untuk disimpan atau dipindahkan ke HP lain secara offline.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 14),
                       FilledButton.tonalIcon(
@@ -325,9 +579,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: _isBackupBusy ? null : _handleRestoreBackup,
-                        icon: const Icon(
-                          Icons.settings_backup_restore_rounded,
-                        ),
+                        icon: const Icon(Icons.settings_backup_restore_rounded),
                         label: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 10),
                           child: Text('Restore dari File Backup (.zip)'),
@@ -356,9 +608,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Expanded(
                             child: Text(
                               'Konfigurasi Istirahat Warm-up Set',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -374,17 +624,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           'Jika aktif, otot besar (Chest/Back/Legs) dan otot kecil (Shoulders/Arms/Abs) memiliki durasi rest warm-up berbeda.',
                         ),
                         value: settings.useSplitWarmupRest,
-                        onChanged: (value) => _saveSettings(
-                          settings,
-                          useSplitWarmupRest: value,
-                        ),
+                        onChanged: (value) =>
+                            _saveSettings(settings, useSplitWarmupRest: value),
                       ),
                       const Divider(),
                       if (settings.useSplitWarmupRest) ...[
                         _DurationSettingTile(
                           title: 'Warm-up Otot Besar (LARGE)',
-                          subtitle:
-                              'Chest, Lats, Upper Back, Quads, Hamstrings, Glutes',
+                          subtitle: 'Chest, Lats, Upper Back, Quads, Hamstrings, Glutes',
                           seconds: settings.largeMuscleWarmupRestSeconds,
                           onChanged: (newVal) => _saveSettings(
                             settings,
@@ -403,8 +650,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         const SizedBox(height: 12),
                         _DurationSettingTile(
                           title: 'Warm-up Otot Kecil (SMALL)',
-                          subtitle:
-                              'Delts, Biceps, Triceps, Calves, Abs, Forearms, Traps',
+                          subtitle: 'Delts, Biceps, Triceps, Calves, Abs, Forearms, Traps',
                           seconds: settings.smallMuscleWarmupRestSeconds,
                           onChanged: (newVal) => _saveSettings(
                             settings,
@@ -462,9 +708,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Expanded(
                             child: Text(
                               'Konfigurasi Istirahat Working Set',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -473,8 +717,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 12),
                       _DurationSettingTile(
                         title: 'Default Working Set Rest',
-                        subtitle:
-                            'Digunakan pada Normal, Drop Set, dan Failure Set jika gerakan/plan tidak menentukan target khusus',
+                        subtitle: 'Digunakan pada Normal, Drop Set, dan Failure Set jika gerakan/plan tidak menentukan target khusus',
                         seconds: settings.defaultWorkingSetRestSeconds,
                         onChanged: (newVal) => _saveSettings(
                           settings,
@@ -521,61 +764,66 @@ class _CloudSyncStatusCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final dateFmt = DateFormat('d MMM yyyy, HH:mm:ss');
 
-    final (shortBadge, statusSubtitle, badgeColor, badgeTextColor, icon) =
-        switch (syncState.phase) {
+    final (
+      shortBadge,
+      statusSubtitle,
+      badgeColor,
+      badgeTextColor,
+      icon,
+    ) = switch (syncState.phase) {
       CloudSyncPhase.uploadingMedia => (
-          'Syncing...',
-          'Mengunggah foto & video latihan ke server...',
-          colorScheme.secondaryContainer,
-          colorScheme.onSecondaryContainer,
-          Icons.cloud_upload_outlined,
-        ),
+        'Syncing...',
+        'Mengunggah foto & video latihan ke server...',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.cloud_upload_outlined,
+      ),
       CloudSyncPhase.pushingOutbox => (
-          'Syncing...',
-          'Mengirim $pendingOutboxCount perubahan lokal (Outbox)...',
-          colorScheme.secondaryContainer,
-          colorScheme.onSecondaryContainer,
-          Icons.sync_rounded,
-        ),
+        'Syncing...',
+        'Mengirim $pendingOutboxCount perubahan lokal (Outbox)...',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.sync_rounded,
+      ),
       CloudSyncPhase.pullingDelta => (
-          'Syncing...',
-          'Mengambil pembaruan terbaru dari cloud...',
-          colorScheme.secondaryContainer,
-          colorScheme.onSecondaryContainer,
-          Icons.cloud_download_outlined,
-        ),
+        'Syncing...',
+        'Mengambil pembaruan terbaru dari cloud...',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.cloud_download_outlined,
+      ),
       CloudSyncPhase.offline => (
-          'Offline',
-          'Perangkat offline ($pendingOutboxCount item tersimpan di lokal)',
-          Colors.amber.shade800,
-          Colors.white,
-          Icons.cloud_off_rounded,
-        ),
+        'Offline',
+        'Perangkat offline ($pendingOutboxCount item tersimpan di lokal)',
+        Colors.amber.shade800,
+        Colors.white,
+        Icons.cloud_off_rounded,
+      ),
       CloudSyncPhase.error => (
-          'Sync Error',
-          '$pendingOutboxCount perubahan aman tersimpan di antrean lokal',
-          colorScheme.errorContainer,
-          colorScheme.onErrorContainer,
-          Icons.error_outline_rounded,
-        ),
+        'Sync Error',
+        '$pendingOutboxCount perubahan aman tersimpan di antrean lokal',
+        colorScheme.errorContainer,
+        colorScheme.onErrorContainer,
+        Icons.error_outline_rounded,
+      ),
       CloudSyncPhase.synced => (
-          'Synced',
-          pendingOutboxCount == 0
-              ? 'Seluruh data lokal telah tersinkronisasi'
-              : '$pendingOutboxCount perubahan baru siap di-sync',
-          Colors.green.shade700,
-          Colors.white,
-          Icons.cloud_done_rounded,
-        ),
+        'Synced',
+        pendingOutboxCount == 0
+            ? 'Seluruh data lokal telah tersinkronisasi'
+            : '$pendingOutboxCount perubahan baru siap di-sync',
+        Colors.green.shade700,
+        Colors.white,
+        Icons.cloud_done_rounded,
+      ),
       CloudSyncPhase.idle => (
-          syncState.isConfigured ? 'Siap Sync' : 'Mode Offline',
-          syncState.isConfigured
-              ? '$pendingOutboxCount perubahan lokal menunggu sinkronisasi'
-              : 'Data tersimpan 100% di perangkat ($pendingOutboxCount item)',
-          colorScheme.surfaceContainerHighest,
-          colorScheme.onSurfaceVariant,
-          Icons.cloud_queue_rounded,
-        ),
+        syncState.isConfigured ? 'Siap Sync' : 'Mode Offline',
+        syncState.isConfigured
+            ? '$pendingOutboxCount perubahan lokal menunggu sinkronisasi'
+            : 'Data tersimpan 100% di perangkat ($pendingOutboxCount item)',
+        colorScheme.surfaceContainerHighest,
+        colorScheme.onSurfaceVariant,
+        Icons.cloud_queue_rounded,
+      ),
     };
 
     return Card(
@@ -592,9 +840,8 @@ class _CloudSyncStatusCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Cloud Sync Engine',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -610,9 +857,9 @@ class _CloudSyncStatusCard extends StatelessWidget {
                   child: Text(
                     shortBadge,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: badgeTextColor,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: badgeTextColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -620,9 +867,8 @@ class _CloudSyncStatusCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               statusSubtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
 
@@ -684,9 +930,9 @@ class _CloudSyncStatusCard extends StatelessWidget {
               Text(
                 syncState.errorMessage!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
 
@@ -745,18 +991,16 @@ class _SyncInfoTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 2),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -788,16 +1032,14 @@ class _DurationSettingTile extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 2),
         Text(
           subtitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
         Row(
@@ -824,16 +1066,16 @@ class _DurationSettingTile extends StatelessWidget {
                     children: [
                       Text(
                         '${formatRestDuration(seconds)} (${seconds}s)',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: colorScheme.onPrimaryContainer,
                               fontWeight: FontWeight.bold,
                             ),
                       ),
                       Text(
                         'Ketuk untuk ubah manual (mm:ss)',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                            ),
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: colorScheme.onPrimaryContainer),
                       ),
                     ],
                   ),
