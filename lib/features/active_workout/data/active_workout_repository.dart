@@ -803,6 +803,78 @@ class ActiveWorkoutRepository {
     });
   }
 
+  /// Reorders the exercises in the active workout session according to [orderedSessionExerciseIds].
+  Future<void> reorderSessionExercises({
+    required List<String> orderedSessionExerciseIds,
+  }) async {
+    final now = DateTime.now().toUtc();
+    await _db.transaction(() async {
+      for (var i = 0; i < orderedSessionExerciseIds.length; i++) {
+        await (_db.update(_db.workoutSessionExercises)
+              ..where(
+                (tbl) =>
+                    tbl.id.equals(orderedSessionExerciseIds[i]) &
+                    tbl.deletedAt.isNull(),
+              ))
+            .write(
+          WorkoutSessionExercisesCompanion(
+            sortOrder: Value(i),
+            updatedAt: Value(now),
+            syncStatus: Value(SyncStatus.pendingPush),
+          ),
+        );
+      }
+    });
+  }
+
+  /// Replaces the exercise on [sessionExerciseId] with [newExerciseId] and
+  /// automatically maps to a registered [GymMachine] at [gymLocationId] if available.
+  Future<void> replaceExerciseInSession({
+    required String sessionExerciseId,
+    required String newExerciseId,
+    required String? gymLocationId,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final autoMachineId = await _resolveAutoMachineId(
+      gymLocationId: gymLocationId,
+      exerciseId: newExerciseId,
+    );
+
+    await (_db.update(_db.workoutSessionExercises)
+          ..where(
+            (tbl) => tbl.id.equals(sessionExerciseId) & tbl.deletedAt.isNull(),
+          ))
+        .write(
+      WorkoutSessionExercisesCompanion(
+        exerciseId: Value(newExerciseId),
+        gymMachineId: Value(autoMachineId),
+        updatedAt: Value(now),
+        syncStatus: Value(SyncStatus.pendingPush),
+      ),
+    );
+  }
+
+  /// Assigns or clears [supersetGroupId] across the given [sessionExerciseIds].
+  Future<void> updateSupersetForSessionExercises({
+    required List<String> sessionExerciseIds,
+    required String? supersetGroupId,
+  }) async {
+    if (sessionExerciseIds.isEmpty) return;
+    final now = DateTime.now().toUtc();
+    await (_db.update(_db.workoutSessionExercises)
+          ..where(
+            (tbl) =>
+                tbl.id.isIn(sessionExerciseIds) & tbl.deletedAt.isNull(),
+          ))
+        .write(
+      WorkoutSessionExercisesCompanion(
+        supersetGroupId: Value(_nullIfEmpty(supersetGroupId)),
+        updatedAt: Value(now),
+        syncStatus: Value(SyncStatus.pendingPush),
+      ),
+    );
+  }
+
   /// Adds a new set (or a sub-drop set when [parentSetId] is provided) to [sessionExerciseId].
   Future<String> addSet({
     required String sessionExerciseId,
@@ -925,22 +997,71 @@ class ActiveWorkoutRepository {
     );
   }
 
-  /// Soft-deletes a set and any sub-drop sets linked to it.
+  /// Soft-deletes a set and any sub-drop sets linked to it, then renumbers
+  /// remaining active sets sequentially.
   Future<void> softDeleteSet(String setId) async {
     final now = DateTime.now().toUtc();
-    await (_db.update(_db.workoutSets)
-          ..where(
-            (tbl) =>
-                (tbl.id.equals(setId) | tbl.parentSetId.equals(setId)) &
-                tbl.deletedAt.isNull(),
-          ))
-        .write(
-      WorkoutSetsCompanion(
-        deletedAt: Value(now),
-        updatedAt: Value(now),
-        syncStatus: Value(SyncStatus.pendingDelete),
-      ),
-    );
+    await _db.transaction(() async {
+      final targetSet = await (_db.select(_db.workoutSets)
+            ..where((tbl) => tbl.id.equals(setId)))
+          .getSingleOrNull();
+
+      await (_db.update(_db.workoutSets)
+            ..where(
+              (tbl) =>
+                  (tbl.id.equals(setId) | tbl.parentSetId.equals(setId)) &
+                  tbl.deletedAt.isNull(),
+            ))
+          .write(
+        WorkoutSetsCompanion(
+          deletedAt: Value(now),
+          updatedAt: Value(now),
+          syncStatus: Value(SyncStatus.pendingDelete),
+        ),
+      );
+
+      if (targetSet == null) return;
+
+      final remainingSets = await (_db.select(_db.workoutSets)
+            ..where(
+              (tbl) =>
+                  tbl.workoutSessionExerciseId
+                      .equals(targetSet.workoutSessionExerciseId) &
+                  tbl.deletedAt.isNull(),
+            )
+            ..orderBy([
+              (tbl) => OrderingTerm.asc(tbl.setNumber),
+              (tbl) => OrderingTerm.asc(tbl.createdAt),
+            ]))
+          .get();
+
+      var currentNum = 0;
+      final newNumByParentId = <String, int>{};
+
+      for (final s in remainingSets) {
+        int assignedNum;
+        if (s.parentSetId != null &&
+            newNumByParentId.containsKey(s.parentSetId!)) {
+          assignedNum = newNumByParentId[s.parentSetId!]!;
+        } else {
+          currentNum++;
+          assignedNum = currentNum;
+          newNumByParentId[s.id] = assignedNum;
+        }
+
+        if (s.setNumber != assignedNum) {
+          await (_db.update(_db.workoutSets)
+                ..where((tbl) => tbl.id.equals(s.id)))
+              .write(
+            WorkoutSetsCompanion(
+              setNumber: Value(assignedNum),
+              updatedAt: Value(now),
+              syncStatus: Value(SyncStatus.pendingPush),
+            ),
+          );
+        }
+      }
+    });
   }
 
   /// Marks the active workout session as completed (`completedAt = now`).

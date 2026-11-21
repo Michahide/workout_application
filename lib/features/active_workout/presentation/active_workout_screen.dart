@@ -10,6 +10,7 @@ import '../../../core/database/domain_labels.dart';
 import '../../../core/database/tables.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../analytics/presentation/widgets/exercise_analytics_view.dart';
+import '../../exercise_library/presentation/exercise_form_sheet.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../../exercise_library/presentation/exercise_media_gallery.dart';
 import '../../gym_locations/presentation/machine_thumbnail_avatar.dart';
@@ -27,9 +28,6 @@ class ActiveWorkoutScreen extends ConsumerWidget {
     WidgetRef ref,
     ActiveWorkoutSessionDetails sessionDetails,
   ) async {
-    final allExercises = await ref.read(allExercisesStreamProvider.future);
-    if (!context.mounted) return;
-
     final chosen =
         await showModalBottomSheet<
           ({Exercise exercise, String? supersetGroupId})
@@ -38,20 +36,28 @@ class ActiveWorkoutScreen extends ConsumerWidget {
           isScrollControlled: true,
           useSafeArea: true,
           builder: (_) => _AddSessionExerciseSheet(
-            allExercises: allExercises,
             existingExercises: sessionDetails.exercises,
           ),
         );
 
     if (chosen != null) {
-      await ref
-          .read(activeWorkoutRepositoryProvider)
-          .addExerciseToSession(
-            workoutSessionId: sessionDetails.session.id,
-            exerciseId: chosen.exercise.id,
-            gymLocationId: sessionDetails.session.gymLocationId,
+      final repo = ref.read(activeWorkoutRepositoryProvider);
+      if (chosen.supersetGroupId != null &&
+          sessionDetails.exercises.isNotEmpty) {
+        final lastSe = sessionDetails.exercises.last.sessionExercise;
+        if (lastSe.supersetGroupId == null) {
+          await repo.updateSupersetForSessionExercises(
+            sessionExerciseIds: [lastSe.id],
             supersetGroupId: chosen.supersetGroupId,
           );
+        }
+      }
+      await repo.addExerciseToSession(
+        workoutSessionId: sessionDetails.session.id,
+        exerciseId: chosen.exercise.id,
+        gymLocationId: sessionDetails.session.gymLocationId,
+        supersetGroupId: chosen.supersetGroupId,
+      );
     }
   }
 
@@ -563,6 +569,56 @@ class _ActiveExerciseCard extends ConsumerWidget {
     );
   }
 
+  Future<void> _handleExerciseMenuAction(
+    BuildContext context,
+    WidgetRef ref,
+    String action,
+  ) async {
+    switch (action) {
+      case 'reorder':
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _ReorderSessionExercisesSheet(
+            sessionDetails: sessionDetails,
+          ),
+        );
+      case 'replace':
+        final replacement = await showModalBottomSheet<Exercise>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _ReplaceSessionExerciseSheet(
+            currentExercise: bundle.exercise,
+          ),
+        );
+        if (replacement != null && replacement.id != bundle.exercise.id) {
+          await ref
+              .read(activeWorkoutRepositoryProvider)
+              .replaceExerciseInSession(
+                sessionExerciseId: bundle.sessionExercise.id,
+                newExerciseId: replacement.id,
+                gymLocationId: sessionDetails.session.gymLocationId,
+              );
+        }
+      case 'superset':
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => _ManageSessionSupersetSheet(
+            sessionDetails: sessionDetails,
+            targetBundle: bundle,
+          ),
+        );
+      case 'delete':
+        await ref
+            .read(activeWorkoutRepositoryProvider)
+            .removeExerciseFromSession(bundle.sessionExercise.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final exercise = bundle.exercise;
@@ -648,13 +704,62 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   onPressed: () => _openMediaSheet(context),
                   icon: const Icon(Icons.perm_media_outlined, size: 20),
                 ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Hapus Gerakan dari Sesi',
-                  onPressed: () => ref
-                      .read(activeWorkoutRepositoryProvider)
-                      .removeExerciseFromSession(bundle.sessionExercise.id),
-                  icon: const Icon(Icons.delete_outline, size: 20),
+                PopupMenuButton<String>(
+                  tooltip: 'Opsi Gerakan',
+                  onSelected: (action) =>
+                      _handleExerciseMenuAction(context, ref, action),
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem<String>(
+                      value: 'reorder',
+                      child: ListTile(
+                        leading: Icon(Icons.swap_vert_rounded),
+                        title: Text('Reorder Gerakan'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'replace',
+                      child: ListTile(
+                        leading: Icon(Icons.find_replace_rounded),
+                        title: Text('Replace / Ganti Gerakan'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'superset',
+                      child: ListTile(
+                        leading: const Icon(Icons.link_rounded),
+                        title: Text(
+                          bundle.sessionExercise.supersetGroupId != null
+                              ? 'Atur / Lepas Superset'
+                              : 'Add to Superset',
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.delete_outline,
+                          color: Theme.of(ctx).colorScheme.error,
+                        ),
+                        title: Text(
+                          'Hapus Gerakan',
+                          style: TextStyle(
+                            color: Theme.of(ctx).colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -813,16 +918,53 @@ class _ActiveExerciseCard extends ConsumerWidget {
             ),
             const Divider(height: 10),
 
-            // Set Rows
+            // Set Rows (Swipe left to delete a set)
             ...bundle.sets.map((setRow) {
               final prevSet = prevPerf.forSet(setRow.setNumber);
-              return _WorkoutSetRow(
-                key: ValueKey(setRow.id),
-                sessionDetails: sessionDetails,
-                bundle: bundle,
-                workoutSet: setRow,
-                previousSet: prevSet,
-                weightUnit: weightUnit,
+              return Dismissible(
+                key: ValueKey('dismiss_set_${setRow.id}'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.centerRight,
+                  decoration: BoxDecoration(
+                    color: colorScheme.error,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Hapus Set',
+                        style: TextStyle(
+                          color: colorScheme.onError,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.delete_sweep_rounded,
+                        color: colorScheme.onError,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+                onDismissed: (_) {
+                  ref
+                      .read(activeWorkoutRepositoryProvider)
+                      .softDeleteSet(setRow.id);
+                },
+                child: _WorkoutSetRow(
+                  key: ValueKey(setRow.id),
+                  sessionDetails: sessionDetails,
+                  bundle: bundle,
+                  workoutSet: setRow,
+                  previousSet: prevSet,
+                  weightUnit: weightUnit,
+                ),
               );
             }),
 
@@ -1849,48 +1991,218 @@ class _QuickMachineSelectorSheetState
   }
 }
 
-class _AddSessionExerciseSheet extends StatefulWidget {
+class _AddSessionExerciseSheet extends ConsumerStatefulWidget {
   const _AddSessionExerciseSheet({
-    required this.allExercises,
     required this.existingExercises,
   });
 
-  final List<Exercise> allExercises;
   final List<ActiveSessionExerciseBundle> existingExercises;
 
   @override
-  State<_AddSessionExerciseSheet> createState() =>
+  ConsumerState<_AddSessionExerciseSheet> createState() =>
       _AddSessionExerciseSheetState();
 }
 
-class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
+class _AddSessionExerciseSheetState
+    extends ConsumerState<_AddSessionExerciseSheet> {
   String _search = '';
   bool _pairWithLastExercise = false;
 
+  Future<void> _openCreateCustomExercise() async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const ExerciseFormSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.allExercises
-        .where((e) {
-          if (_search.trim().isEmpty) return true;
-          return e.name.toLowerCase().contains(_search.trim().toLowerCase());
-        })
-        .toList(growable: false);
-
+    final exercisesAsync = ref.watch(allExercisesStreamProvider);
     final lastExercise = widget.existingExercises.isNotEmpty
         ? widget.existingExercises.last
         : null;
 
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Tambah Gerakan ke Sesi',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _openCreateCustomExercise,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Custom Baru'),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            if (lastExercise != null)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _pairWithLastExercise,
+                onChanged: (v) =>
+                    setState(() => _pairWithLastExercise = v ?? false),
+                title: Text(
+                  'Gabungkan Superset dengan "${lastExercise.exercise.name}"',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            TextField(
+              autofocus: true,
+              onChanged: (val) => setState(() => _search = val),
+              decoration: const InputDecoration(
+                hintText: 'Cari nama gerakan...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: exercisesAsync.when(
+                data: (allExercises) {
+                  final filtered = allExercises.where((e) {
+                    if (_search.trim().isEmpty) return true;
+                    return e.name.toLowerCase().contains(
+                          _search.trim().toLowerCase(),
+                        );
+                  }).toList(growable: false);
+
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Gerakan tidak ditemukan.'),
+                          const SizedBox(height: 10),
+                          FilledButton.tonalIcon(
+                            onPressed: _openCreateCustomExercise,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Buat Custom Exercise Baru'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    controller: scrollController,
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final ex = filtered[index];
+                      return ListTile(
+                        title: Text(
+                          ex.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          '${ex.primaryMuscleGroup.label} • ${ex.equipmentCategory.label}',
+                        ),
+                        trailing: const Icon(Icons.add_circle_outline),
+                        onTap: () {
+                          String? supersetId;
+                          if (_pairWithLastExercise && lastExercise != null) {
+                            supersetId =
+                                lastExercise.sessionExercise.supersetGroupId ??
+                                    'ss_${lastExercise.sessionExercise.id.substring(0, 6)}';
+                          }
+                          Navigator.of(context).pop((
+                            exercise: ex,
+                            supersetGroupId: supersetId,
+                          ));
+                        },
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) =>
+                    Center(child: Text('Gagal memuat gerakan: $err')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet to reorder exercises in the active workout session via drag-and-drop.
+class _ReorderSessionExercisesSheet extends ConsumerStatefulWidget {
+  const _ReorderSessionExercisesSheet({required this.sessionDetails});
+
+  final ActiveWorkoutSessionDetails sessionDetails;
+
+  @override
+  ConsumerState<_ReorderSessionExercisesSheet> createState() =>
+      _ReorderSessionExercisesSheetState();
+}
+
+class _ReorderSessionExercisesSheetState
+    extends ConsumerState<_ReorderSessionExercisesSheet> {
+  late List<ActiveSessionExerciseBundle> _items;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List<ActiveSessionExerciseBundle>.from(
+      widget.sessionDetails.exercises,
+    );
+  }
+
+  Future<void> _saveOrder() async {
+    setState(() => _isSaving = true);
+    try {
+      await ref
+          .read(activeWorkoutRepositoryProvider)
+          .reorderSessionExercises(
+            orderedSessionExerciseIds:
+                _items.map((e) => e.sessionExercise.id).toList(growable: false),
+          );
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'Tambah Gerakan ke Sesi',
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  'Reorder Urutan Gerakan',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ),
               IconButton(
@@ -1899,56 +2211,356 @@ class _AddSessionExerciseSheetState extends State<_AddSessionExerciseSheet> {
               ),
             ],
           ),
-          if (lastExercise != null)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _pairWithLastExercise,
-              onChanged: (v) =>
-                  setState(() => _pairWithLastExercise = v ?? false),
-              title: Text(
-                'Gabungkan Superset dengan "${lastExercise.exercise.name}"',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
-          TextField(
-            autofocus: true,
-            onChanged: (val) => setState(() => _search = val),
-            decoration: const InputDecoration(
-              hintText: 'Cari nama gerakan...',
-              prefixIcon: Icon(Icons.search),
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
+          Text(
+            'Tahan & geser ikon garis di kanan untuk mengubah urutan gerakan.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.separated(
-              itemCount: filtered.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
+          const SizedBox(height: 12),
+          Flexible(
+            child: ReorderableListView.builder(
+              shrinkWrap: true,
+              itemCount: _items.length,
+              onReorderItem: (oldIndex, newIndex) {
+                setState(() {
+                  final moved = _items.removeAt(oldIndex);
+                  _items.insert(newIndex, moved);
+                });
+              },
               itemBuilder: (context, index) {
-                final ex = filtered[index];
-                return ListTile(
-                  title: Text(
-                    ex.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                final item = _items[index];
+                return Card(
+                  key: ValueKey(item.sessionExercise.id),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      radius: 14,
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      item.exercise.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      item.selectedMachine?.brandName ??
+                          item.exercise.equipmentCategory.label,
+                    ),
+                    trailing: ReorderableDragStartListener(
+                      index: index,
+                      child: const Icon(Icons.drag_handle_rounded),
+                    ),
                   ),
-                  subtitle: Text(
-                    '${ex.primaryMuscleGroup.label} • ${ex.equipmentCategory.label}',
-                  ),
-                  trailing: const Icon(Icons.add_circle_outline),
-                  onTap: () {
-                    String? supersetId;
-                    if (_pairWithLastExercise && lastExercise != null) {
-                      supersetId =
-                          lastExercise.sessionExercise.supersetGroupId ??
-                          'ss_${lastExercise.sessionExercise.id.substring(0, 6)}';
-                    }
-                    Navigator.of(context)
-                        .pop((exercise: ex, supersetGroupId: supersetId));
-                  },
                 );
               },
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveOrder,
+            icon: const Icon(Icons.check),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('Simpan Urutan Gerakan'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet to replace an exercise in the active session with another exercise.
+class _ReplaceSessionExerciseSheet extends ConsumerStatefulWidget {
+  const _ReplaceSessionExerciseSheet({required this.currentExercise});
+
+  final Exercise currentExercise;
+
+  @override
+  ConsumerState<_ReplaceSessionExerciseSheet> createState() =>
+      _ReplaceSessionExerciseSheetState();
+}
+
+class _ReplaceSessionExerciseSheetState
+    extends ConsumerState<_ReplaceSessionExerciseSheet> {
+  String _search = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final exercisesAsync = ref.watch(allExercisesStreamProvider);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ganti Gerakan (Replace)',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      Text(
+                        'Saat ini: ${widget.currentExercise.name}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              autofocus: true,
+              onChanged: (val) => setState(() => _search = val),
+              decoration: const InputDecoration(
+                hintText: 'Cari gerakan pengganti...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: exercisesAsync.when(
+                data: (allExercises) {
+                  final filtered = allExercises.where((e) {
+                    if (_search.trim().isEmpty) return true;
+                    return e.name.toLowerCase().contains(
+                          _search.trim().toLowerCase(),
+                        );
+                  }).toList(growable: false);
+
+                  return ListView.separated(
+                    controller: scrollController,
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final ex = filtered[index];
+                      final isCurrent = ex.id == widget.currentExercise.id;
+                      return ListTile(
+                        enabled: !isCurrent,
+                        title: Text(
+                          ex.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          '${ex.primaryMuscleGroup.label} • ${ex.equipmentCategory.label}',
+                        ),
+                        trailing: isCurrent
+                            ? const Chip(
+                                label: Text('Saat Ini'),
+                                visualDensity: VisualDensity.compact,
+                              )
+                            : const Icon(Icons.swap_horiz_rounded),
+                        onTap: () => Navigator.of(context).pop(ex),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) =>
+                    Center(child: Text('Gagal memuat gerakan: $err')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet to link or unlink an exercise in a Superset group during an active workout.
+class _ManageSessionSupersetSheet extends ConsumerStatefulWidget {
+  const _ManageSessionSupersetSheet({
+    required this.sessionDetails,
+    required this.targetBundle,
+  });
+
+  final ActiveWorkoutSessionDetails sessionDetails;
+  final ActiveSessionExerciseBundle targetBundle;
+
+  @override
+  ConsumerState<_ManageSessionSupersetSheet> createState() =>
+      _ManageSessionSupersetSheetState();
+}
+
+class _ManageSessionSupersetSheetState
+    extends ConsumerState<_ManageSessionSupersetSheet> {
+  late final Set<String> _selectedSessionExerciseIds;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentGroupId = widget.targetBundle.sessionExercise.supersetGroupId;
+    if (currentGroupId != null && currentGroupId.isNotEmpty) {
+      _selectedSessionExerciseIds = widget.sessionDetails.exercises
+          .where((e) => e.sessionExercise.supersetGroupId == currentGroupId)
+          .map((e) => e.sessionExercise.id)
+          .toSet();
+    } else {
+      _selectedSessionExerciseIds = {widget.targetBundle.sessionExercise.id};
+    }
+  }
+
+  Future<void> _saveSupersetGroup() async {
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(activeWorkoutRepositoryProvider);
+      if (_selectedSessionExerciseIds.length < 2) {
+        // Remove target from superset
+        await repo.updateSupersetForSessionExercises(
+          sessionExerciseIds: [widget.targetBundle.sessionExercise.id],
+          supersetGroupId: null,
+        );
+      } else {
+        final groupId =
+            widget.targetBundle.sessionExercise.supersetGroupId ??
+                'ss_${widget.targetBundle.sessionExercise.id.substring(0, 6)}';
+        await repo.updateSupersetForSessionExercises(
+          sessionExerciseIds: _selectedSessionExerciseIds.toList(),
+          supersetGroupId: groupId,
+        );
+      }
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _removeFromSuperset() async {
+    setState(() => _isSaving = true);
+    try {
+      await ref
+          .read(activeWorkoutRepositoryProvider)
+          .updateSupersetForSessionExercises(
+            sessionExerciseIds: [widget.targetBundle.sessionExercise.id],
+            supersetGroupId: null,
+          );
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final otherExercises = widget.sessionDetails.exercises
+        .where(
+          (e) =>
+              e.sessionExercise.id != widget.targetBundle.sessionExercise.id,
+        )
+        .toList(growable: false);
+    final isCurrentlyInSuperset =
+        widget.targetBundle.sessionExercise.supersetGroupId != null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Atur Superset: ${widget.targetBundle.exercise.name}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          Text(
+            'Pilih gerakan lain di sesi ini yang ingin digabungkan ke dalam putaran Superset yang sama:',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          if (otherExercises.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'Tambahkan minimal 1 gerakan lain ke sesi latihan untuk membuat Superset.',
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: otherExercises.length,
+                itemBuilder: (context, index) {
+                  final item = otherExercises[index];
+                  final seId = item.sessionExercise.id;
+                  final isChecked = _selectedSessionExerciseIds.contains(seId);
+
+                  return CheckboxListTile(
+                    value: isChecked,
+                    onChanged: (checked) {
+                      setState(() {
+                        if (checked == true) {
+                          _selectedSessionExerciseIds.add(seId);
+                        } else {
+                          _selectedSessionExerciseIds.remove(seId);
+                        }
+                      });
+                    },
+                    title: Text(
+                      item.exercise.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      item.supersetBadge != null
+                          ? 'Saat ini di Superset ${item.supersetBadge}'
+                          : item.exercise.primaryMuscleGroup.label,
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 12),
+          if (isCurrentlyInSuperset) ...[
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _removeFromSuperset,
+              icon: const Icon(Icons.link_off_rounded),
+              label: const Text('Lepas Gerakan Ini dari Superset'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          FilledButton.icon(
+            onPressed: _isSaving || _selectedSessionExerciseIds.length < 2
+                ? null
+                : _saveSupersetGroup,
+            icon: const Icon(Icons.link_rounded),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Gabungkan Superset (${_selectedSessionExerciseIds.length} Gerakan)',
+              ),
             ),
           ),
         ],
