@@ -51,9 +51,8 @@ class ExerciseAnalyticsSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Progress & Personal Records (PR)',
-                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: Theme.of(ctx).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   IconButton(
@@ -181,6 +180,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
   @override
   Widget build(BuildContext context) {
     final exercisesAsync = ref.watch(allExercisesStreamProvider);
+    final recentTrainedExerciseAsync = ref.watch(
+      mostRecentTrainedExerciseIdProvider,
+    );
 
     return exercisesAsync.when(
       data: (exercises) {
@@ -190,8 +192,12 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
           );
         }
 
-        final activeExercise = exercises
-                .where((e) => e.id == _selectedExerciseId)
+        final preferredExerciseId =
+            _selectedExerciseId ?? recentTrainedExerciseAsync.asData?.value;
+
+        final activeExercise =
+            exercises
+                .where((e) => e.id == preferredExerciseId)
                 .firstOrNull ??
             exercises.first;
 
@@ -204,10 +210,18 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
         );
 
         // Auto-select most recently used machine on initial load if not yet set
-        String? effectiveMachineId = _selectedGymMachineId;
+        String? candidateMachineId = _selectedGymMachineId;
         if (!_hasResolvedDefaultMachine && recentMachineAsync.hasValue) {
-          effectiveMachineId = recentMachineAsync.value;
+          candidateMachineId = recentMachineAsync.value;
         }
+
+        // Ensure candidateMachineId actually belongs to effectiveExerciseId
+        final loadedMachines = machinesAsync.asData?.value;
+        final String? effectiveMachineId = loadedMachines == null
+            ? candidateMachineId
+            : (loadedMachines.any((m) => m.machine.id == candidateMachineId)
+                  ? candidateMachineId
+                  : null);
 
         final filter = AnalyticsFilter(
           exerciseId: effectiveExerciseId,
@@ -232,8 +246,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                 child: ListTile(
                   onTap: () => _pickExerciseDialog(exercises),
                   leading: CircleAvatar(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer,
                     child: Icon(
                       Icons.fitness_center_rounded,
                       color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -256,9 +271,8 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
             ] else ...[
               Text(
                 activeExercise.name,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
             ],
@@ -274,11 +288,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                     Text(
                       'Filter Spesifik Alat & Lokasi Gym',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     machinesAsync.when(
@@ -327,7 +339,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  selectedItem.machine.brandName ??
+                                                  selectedItem
+                                                          .machine
+                                                          .brandName ??
                                                       selectedItem
                                                           .exercise
                                                           .equipmentCategory
@@ -366,9 +380,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.labelSmall,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelSmall,
                                                   ),
                                               ],
                                             )
@@ -391,9 +405,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                                   machines.isEmpty
                                                       ? 'Belum ada mesin spesifik terdaftar untuk gerakan ini'
                                                       : 'Ketuk untuk memilih 1 dari ${machines.length} alat terdaftar beserta preview fotonya',
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.bodySmall,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall,
                                                 ),
                                               ],
                                             ),
@@ -438,10 +452,11 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                             color: isGlobalSelected
                                                 ? colorScheme.primaryContainer
                                                 : colorScheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.5),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
+                                                      .surfaceContainerHighest
+                                                      .withValues(alpha: 0.5),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
                                             border: isGlobalSelected
                                                 ? Border.all(
                                                     color: colorScheme.primary,
@@ -476,7 +491,8 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                     final item = machines[idx - 1];
                                     final isSelected =
                                         item.machine.id == validMachineId;
-                                    final brand = item.machine.brandName ??
+                                    final brand =
+                                        item.machine.brandName ??
                                         item.exercise.equipmentCategory.label;
                                     final gymName =
                                         item.gymLocation?.name ?? 'Global';
@@ -498,10 +514,11 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                           color: isSelected
                                               ? colorScheme.primaryContainer
                                               : colorScheme
-                                                  .surfaceContainerHighest
-                                                  .withValues(alpha: 0.5),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.5),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                           border: isSelected
                                               ? Border.all(
                                                   color: colorScheme.primary,
@@ -519,10 +536,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                             ),
                                             const SizedBox(width: 8),
                                             ConstrainedBox(
-                                              constraints:
-                                                  const BoxConstraints(
-                                                    maxWidth: 120,
-                                                  ),
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 120,
+                                              ),
                                               child: Column(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
@@ -547,9 +563,9 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
                                                     maxLines: 1,
                                                     overflow:
                                                         TextOverflow.ellipsis,
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.labelSmall,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelSmall,
                                                   ),
                                                 ],
                                               ),
@@ -600,9 +616,8 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
             // 3. PR Bento Grid (4 Cards)
             Text(
               'Personal Records (All-Time)',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             prSummaryAsync.when(
@@ -625,9 +640,8 @@ class _ExerciseAnalyticsViewState extends ConsumerState<ExerciseAnalyticsView> {
             // 4. Interactive fl_chart Progression Section
             Text(
               'Grafik Progres Latihan',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             seriesAsync.when(
@@ -698,9 +712,8 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Pilih Alat & Lokasi Gym',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               IconButton(
@@ -719,9 +732,8 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
                       ? colorScheme.primaryContainer
                       : null,
                   child: ListTile(
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop((selected: true, id: null)),
+                    onTap: () =>
+                        Navigator.of(context).pop((selected: true, id: null)),
                     leading: MachineThumbnailAvatar(
                       exerciseId: exerciseId,
                       gymMachineId: null,
@@ -742,7 +754,8 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
                 const SizedBox(height: 6),
                 ...machines.map((item) {
                   final isSelected = item.machine.id == selectedMachineId;
-                  final brand = item.machine.brandName ??
+                  final brand =
+                      item.machine.brandName ??
                       item.exercise.equipmentCategory.label;
                   final gymName =
                       item.gymLocation?.name ?? 'Global (Semua Gym)';
@@ -752,9 +765,9 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
                     color: isSelected ? colorScheme.primaryContainer : null,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pop((selected: true, id: item.machine.id)),
+                      onTap: () =>
+                          Navigator.of(context)
+                              .pop((selected: true, id: item.machine.id)),
                       child: Padding(
                         padding: const EdgeInsets.all(10),
                         child: Row(
@@ -779,9 +792,7 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                     '📍 $gymName • ${item.machine.weightUnit.label}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
+                                    style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
                                           color: colorScheme.primary,
                                           fontWeight: FontWeight.w600,
@@ -792,9 +803,9 @@ class _VisualMachineFilterPickerSheet extends StatelessWidget {
                                     const SizedBox(height: 2),
                                     Text(
                                       '📌 ${item.machine.pinnedNotes}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
                                     ),
                                   ],
                                 ],
@@ -835,10 +846,12 @@ class _QuickExerciseSearchSheetState extends State<_QuickExerciseSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.exercises.where((e) {
-      if (_query.trim().isEmpty) return true;
-      return e.name.toLowerCase().contains(_query.trim().toLowerCase());
-    }).toList(growable: false);
+    final filtered = widget.exercises
+        .where((e) {
+          if (_query.trim().isEmpty) return true;
+          return e.name.toLowerCase().contains(_query.trim().toLowerCase());
+        })
+        .toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -849,9 +862,8 @@ class _QuickExerciseSearchSheetState extends State<_QuickExerciseSearchSheet> {
               Expanded(
                 child: Text(
                   'Pilih Gerakan untuk Analitik',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               IconButton(

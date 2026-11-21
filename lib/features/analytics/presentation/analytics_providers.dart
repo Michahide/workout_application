@@ -36,8 +36,15 @@ final completedWorkoutSessionsProvider =
       return repo.watchCompletedWorkoutSessions();
     });
 
-final mostRecentMachineForExerciseProvider = FutureProvider.autoDispose
+final mostRecentMachineForExerciseProvider = StreamProvider.autoDispose
     .family<String?, String>((ref, exerciseId) {
       final repo = ref.watch(analyticsRepositoryProvider);
-      return repo.getMostRecentMachineIdForExercise(exerciseId);
+      return repo.watchMostRecentMachineIdForExercise(exerciseId);
     });
+
+final mostRecentTrainedExerciseIdProvider = StreamProvider.autoDispose<String?>(
+  (ref) {
+    final repo = ref.watch(analyticsRepositoryProvider);
+    return repo.watchMostRecentExerciseIdWithData();
+  },
+);

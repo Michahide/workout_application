@@ -10,6 +10,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../database/app_database.dart';
 import '../database/syncable_table_mixin.dart';
+import '../database/table_updates_watcher.dart';
 import '../database/tables.dart';
 import '../media/media_compression_service.dart';
 import 'media_sync_service.dart';
@@ -160,49 +161,29 @@ class SyncEngine {
   /// Watches the total number of pending outbox records across all 10 tables
   /// (excluding in-progress active workout sessions).
   Stream<int> watchPendingOutboxCount() {
-    final triggerStreams = <Stream<dynamic>>[
-      _db.select(_db.appSettings).watch(),
-      _db.select(_db.gymLocations).watch(),
-      _db.select(_db.exercises).watch(),
-      _db.select(_db.gymMachines).watch(),
-      _db.select(_db.exerciseMedia).watch(),
-      _db.select(_db.workoutPlans).watch(),
-      _db.select(_db.workoutPlanExercises).watch(),
-      _db.select(_db.workoutSessions).watch(),
-      _db.select(_db.workoutSessionExercises).watch(),
-      _db.select(_db.workoutSets).watch(),
-    ];
-
-    late final StreamController<void> controller;
-    final subscriptions = <StreamSubscription<dynamic>>[];
-
-    controller = StreamController<void>.broadcast(
-      onListen: () {
-        controller.add(null);
-        for (final s in triggerStreams) {
-          subscriptions.add(
-            s.listen((_) {
-              if (!controller.isClosed) controller.add(null);
-            }),
-          );
+    return watchWithTableUpdates<int>(
+      db: _db,
+      tables: [
+        _db.appSettings,
+        _db.gymLocations,
+        _db.exercises,
+        _db.gymMachines,
+        _db.exerciseMedia,
+        _db.workoutPlans,
+        _db.workoutPlanExercises,
+        _db.workoutSessions,
+        _db.workoutSessionExercises,
+        _db.workoutSets,
+      ],
+      load: () async {
+        final outbox = await collectOutboxBatch();
+        var total = 0;
+        for (final list in outbox.payload.values) {
+          total += list.length;
         }
-      },
-      onCancel: () {
-        for (final sub in subscriptions) {
-          sub.cancel();
-        }
-        subscriptions.clear();
+        return total;
       },
     );
-
-    return controller.stream.asyncMap((_) async {
-      final outbox = await collectOutboxBatch();
-      var total = 0;
-      for (final list in outbox.payload.values) {
-        total += list.length;
-      }
-      return total;
-    });
   }
 
   /// Runs all 3 synchronization phases sequentially under a mutex lock (`_isSyncing`).

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/domain_labels.dart';
+import '../../exercise_library/presentation/exercise_form_sheet.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../data/workout_plan_repository.dart';
 
@@ -58,12 +59,12 @@ class _WorkoutPlanFormScreenState extends ConsumerState<WorkoutPlanFormScreen> {
     super.dispose();
   }
 
-  Future<void> _pickExercisesToAdd(List<Exercise> allExercises) async {
+  Future<void> _pickExercisesToAdd() async {
     final chosenExercise = await showModalBottomSheet<Exercise>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _ExercisePickerModal(allExercises: allExercises),
+      builder: (_) => const _ExercisePickerModal(),
     );
 
     if (chosenExercise != null) {
@@ -306,7 +307,7 @@ class _WorkoutPlanFormScreenState extends ConsumerState<WorkoutPlanFormScreen> {
                         )
                       else
                         TextButton.icon(
-                          onPressed: () => _pickExercisesToAdd(allExercises),
+                          onPressed: _pickExercisesToAdd,
                           icon: const Icon(Icons.add),
                           label: const Text('Tambah Gerakan'),
                         ),
@@ -347,8 +348,7 @@ class _WorkoutPlanFormScreenState extends ConsumerState<WorkoutPlanFormScreen> {
                               ),
                               const SizedBox(height: 12),
                               FilledButton.tonalIcon(
-                                onPressed: () =>
-                                    _pickExercisesToAdd(allExercises),
+                                onPressed: _pickExercisesToAdd,
                                 icon: const Icon(Icons.add),
                                 label: const Text('Pilih Gerakan'),
                               ),
@@ -539,90 +539,118 @@ class _WorkoutPlanFormScreenState extends ConsumerState<WorkoutPlanFormScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Gagal memuat gerakan: $err')),
       ),
-      floatingActionButton: exercisesAsync.asData != null
-          ? FloatingActionButton.extended(
-              onPressed: () =>
-                  _pickExercisesToAdd(exercisesAsync.asData!.value),
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Gerakan'),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _pickExercisesToAdd,
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Gerakan'),
+      ),
     );
   }
 }
 
-class _ExercisePickerModal extends StatefulWidget {
-  const _ExercisePickerModal({required this.allExercises});
-
-  final List<Exercise> allExercises;
+class _ExercisePickerModal extends ConsumerStatefulWidget {
+  const _ExercisePickerModal();
 
   @override
-  State<_ExercisePickerModal> createState() => _ExercisePickerModalState();
+  ConsumerState<_ExercisePickerModal> createState() =>
+      _ExercisePickerModalState();
 }
 
-class _ExercisePickerModalState extends State<_ExercisePickerModal> {
+class _ExercisePickerModalState extends ConsumerState<_ExercisePickerModal> {
   String _query = '';
+
+  Future<void> _openCreateCustomExercise() async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const ExerciseFormSheet(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.allExercises.where((e) {
-      if (_query.trim().isEmpty) return true;
-      return e.name.toLowerCase().contains(_query.trim().toLowerCase());
-    }).toList(growable: false);
+    final exercisesAsync = ref.watch(allExercisesStreamProvider);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Pilih Gerakan Latihan',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Pilih Gerakan Latihan',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            autofocus: true,
-            onChanged: (val) => setState(() => _query = val),
-            decoration: const InputDecoration(
-              hintText: 'Cari nama gerakan...',
-              prefixIcon: Icon(Icons.search),
-              isDense: true,
-              border: OutlineInputBorder(),
+                TextButton.icon(
+                  onPressed: _openCreateCustomExercise,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Custom Baru'),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.separated(
-              itemCount: filtered.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final ex = filtered[index];
-                return ListTile(
-                  title: Text(
-                    ex.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    '${ex.primaryMuscleGroup.label} • ${ex.equipmentCategory.label}',
-                  ),
-                  trailing: const Icon(Icons.add_circle_outline),
-                  onTap: () => Navigator.of(context).pop(ex),
-                );
-              },
+            const SizedBox(height: 8),
+            TextField(
+              autofocus: true,
+              onChanged: (val) => setState(() => _query = val),
+              decoration: const InputDecoration(
+                hintText: 'Cari nama gerakan...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: exercisesAsync.when(
+                data: (allExercises) {
+                  final filtered = allExercises.where((e) {
+                    if (_query.trim().isEmpty) return true;
+                    return e.name.toLowerCase().contains(
+                          _query.trim().toLowerCase(),
+                        );
+                  }).toList(growable: false);
+
+                  return ListView.separated(
+                    controller: scrollController,
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final ex = filtered[index];
+                      return ListTile(
+                        title: Text(
+                          ex.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '${ex.primaryMuscleGroup.label} • ${ex.equipmentCategory.label}',
+                        ),
+                        trailing: const Icon(Icons.add_circle_outline),
+                        onTap: () => Navigator.of(context).pop(ex),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) =>
+                    Center(child: Text('Gagal memuat gerakan: $err')),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

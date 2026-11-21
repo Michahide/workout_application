@@ -498,6 +498,29 @@ class ActiveWorkoutRepository {
   // INLINE PREVIOUS PERFORMANCE PER GYM MACHINE (WITH OTHER GYM FALLBACK)
   // ---------------------------------------------------------------------------
 
+  /// Reactively watches the last completed workout session sets for [exerciseId] and [gymMachineId].
+  Stream<PreviousExercisePerformance> watchPreviousPerformanceForMachine({
+    required String exerciseId,
+    required String? gymMachineId,
+    String? excludeSessionId,
+  }) {
+    return watchWithTableUpdates<PreviousExercisePerformance>(
+      db: _db,
+      tables: [
+        _db.workoutSessions,
+        _db.workoutSessionExercises,
+        _db.workoutSets,
+        _db.gymMachines,
+        _db.gymLocations,
+      ],
+      load: () => getPreviousPerformanceForMachine(
+        exerciseId: exerciseId,
+        gymMachineId: gymMachineId,
+        excludeSessionId: excludeSessionId,
+      ),
+    );
+  }
+
   /// Queries the last completed workout session sets for [exerciseId] and [gymMachineId].
   ///
   /// - Primary lookup: strictly filters by `exerciseId` AND `gymMachineId` from the most
@@ -1123,10 +1146,10 @@ typedef PreviousPerfKey = ({
   String? excludeSessionId,
 });
 
-final previousExercisePerformanceProvider = FutureProvider.autoDispose
+final previousExercisePerformanceProvider = StreamProvider.autoDispose
     .family<PreviousExercisePerformance, PreviousPerfKey>((ref, key) {
       final repo = ref.watch(activeWorkoutRepositoryProvider);
-      return repo.getPreviousPerformanceForMachine(
+      return repo.watchPreviousPerformanceForMachine(
         exerciseId: key.exerciseId,
         gymMachineId: key.gymMachineId,
         excludeSessionId: key.excludeSessionId,

@@ -282,6 +282,54 @@ class AnalyticsRepository {
     return row?.readTable(_db.workoutSessionExercises).gymMachineId;
   }
 
+  /// Reactively watches the `gymMachineId` most recently used for [exerciseId].
+  Stream<String?> watchMostRecentMachineIdForExercise(String exerciseId) {
+    return watchWithTableUpdates<String?>(
+      db: _db,
+      tables: _analyticsWatchedTables,
+      load: () => getMostRecentMachineIdForExercise(exerciseId),
+    );
+  }
+
+  /// Returns the `exerciseId` from the most recent workout session that has
+  /// at least one completed working set, so the Analytics tab defaults to an
+  /// exercise with real data instead of an unused alphabetical exercise.
+  Future<String?> getMostRecentExerciseIdWithData() async {
+    final query = _db.select(_db.workoutSessionExercises).join([
+      innerJoin(
+        _db.workoutSessions,
+        _db.workoutSessions.id.equalsExp(
+              _db.workoutSessionExercises.workoutSessionId,
+            ) &
+            _db.workoutSessions.deletedAt.isNull(),
+      ),
+      innerJoin(
+        _db.exercises,
+        _db.exercises.id.equalsExp(_db.workoutSessionExercises.exerciseId) &
+            _db.exercises.deletedAt.isNull(),
+      ),
+    ])
+      ..where(_db.workoutSessionExercises.deletedAt.isNull())
+      ..orderBy([
+        OrderingTerm.desc(_db.workoutSessions.completedAt),
+        OrderingTerm.desc(_db.workoutSessions.startedAt),
+        OrderingTerm.asc(_db.workoutSessionExercises.sortOrder),
+      ])
+      ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    return row?.readTable(_db.workoutSessionExercises).exerciseId;
+  }
+
+  /// Reactively watches the most recently trained `exerciseId`.
+  Stream<String?> watchMostRecentExerciseIdWithData() {
+    return watchWithTableUpdates<String?>(
+      db: _db,
+      tables: _analyticsWatchedTables,
+      load: getMostRecentExerciseIdWithData,
+    );
+  }
+
   List<TableInfo<Table, dynamic>> get _analyticsWatchedTables => [
         _db.workoutSessions,
         _db.workoutSessionExercises,

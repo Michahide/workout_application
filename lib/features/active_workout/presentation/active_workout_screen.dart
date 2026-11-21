@@ -1053,25 +1053,28 @@ class _WorkoutSetRow extends ConsumerStatefulWidget {
 class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
   late final TextEditingController _primaryInputCtrl;
   late final TextEditingController _secondaryInputCtrl;
+  late final FocusNode _primaryFocusNode;
+  late final FocusNode _secondaryFocusNode;
 
   @override
   void initState() {
     super.initState();
     _primaryInputCtrl = TextEditingController(text: _initialPrimaryText());
     _secondaryInputCtrl = TextEditingController(text: _initialSecondaryText());
+    _primaryFocusNode = FocusNode();
+    _secondaryFocusNode = FocusNode();
   }
 
   @override
   void didUpdateWidget(covariant _WorkoutSetRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     final newPrimary = _initialPrimaryText();
-    if (_primaryInputCtrl.text != newPrimary &&
-        !FocusScope.of(context).hasFocus) {
+    if (_primaryInputCtrl.text != newPrimary && !_primaryFocusNode.hasFocus) {
       _primaryInputCtrl.text = newPrimary;
     }
     final newSecondary = _initialSecondaryText();
     if (_secondaryInputCtrl.text != newSecondary &&
-        !FocusScope.of(context).hasFocus) {
+        !_secondaryFocusNode.hasFocus) {
       _secondaryInputCtrl.text = newSecondary;
     }
   }
@@ -1080,6 +1083,8 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
   void dispose() {
     _primaryInputCtrl.dispose();
     _secondaryInputCtrl.dispose();
+    _primaryFocusNode.dispose();
+    _secondaryFocusNode.dispose();
     super.dispose();
   }
 
@@ -1178,16 +1183,45 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
         );
 
     setState(() {
-      if (prev.weight != null) {
-        _primaryInputCtrl.text = _formatDouble(prev.weight);
-      }
-      if (prev.reps != null) {
-        if (widget.bundle.exercise.exerciseType ==
-            ExerciseType.bodyweight_reps) {
-          _primaryInputCtrl.text = prev.reps.toString();
-        } else {
-          _secondaryInputCtrl.text = prev.reps.toString();
-        }
+      switch (widget.bundle.exercise.exerciseType) {
+        case ExerciseType.weight_reps:
+        case ExerciseType.weighted_bodyweight:
+        case ExerciseType.assisted_bodyweight:
+          if (prev.weight != null) {
+            _primaryInputCtrl.text = _formatDouble(prev.weight);
+          }
+          if (prev.reps != null) {
+            _secondaryInputCtrl.text = prev.reps.toString();
+          }
+        case ExerciseType.bodyweight_reps:
+          if (prev.reps != null) {
+            _primaryInputCtrl.text = prev.reps.toString();
+          }
+        case ExerciseType.duration:
+          if (prev.durationSeconds != null) {
+            _primaryInputCtrl.text = prev.durationSeconds.toString();
+          }
+        case ExerciseType.duration_weight:
+          if (prev.weight != null) {
+            _primaryInputCtrl.text = _formatDouble(prev.weight);
+          }
+          if (prev.durationSeconds != null) {
+            _secondaryInputCtrl.text = prev.durationSeconds.toString();
+          }
+        case ExerciseType.distance_duration:
+          if (prev.distanceMeters != null) {
+            _primaryInputCtrl.text = _formatDouble(prev.distanceMeters);
+          }
+          if (prev.durationSeconds != null) {
+            _secondaryInputCtrl.text = prev.durationSeconds.toString();
+          }
+        case ExerciseType.weight_distance:
+          if (prev.weight != null) {
+            _primaryInputCtrl.text = _formatDouble(prev.weight);
+          }
+          if (prev.distanceMeters != null) {
+            _secondaryInputCtrl.text = _formatDouble(prev.distanceMeters);
+          }
       }
     });
   }
@@ -1358,6 +1392,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                         height: 36,
                         child: TextField(
                           controller: _primaryInputCtrl,
+                          focusNode: _primaryFocusNode,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
@@ -1387,6 +1422,7 @@ class _WorkoutSetRowState extends ConsumerState<_WorkoutSetRow> {
                           height: 36,
                           child: TextField(
                             controller: _secondaryInputCtrl,
+                            focusNode: _secondaryFocusNode,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
