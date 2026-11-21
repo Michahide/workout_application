@@ -10,6 +10,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../../gym_locations/data/gym_location_repository.dart';
 import '../../gym_locations/presentation/gym_locations_providers.dart';
 import '../data/app_settings_repository.dart';
+import '../data/user_preferences_repository.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -445,6 +446,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(appSettingsStreamProvider);
+    final userPrefs = ref.watch(userPreferencesProvider);
+    final userPrefsNotifier = ref.read(userPreferencesProvider.notifier);
     final syncState = ref.watch(syncControllerProvider);
     final pendingOutboxAsync = ref.watch(pendingOutboxCountStreamProvider);
     final pendingCount = pendingOutboxAsync.asData?.value ?? 0;
@@ -463,6 +466,232 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTapConfigure: () => _showEndpointConfigSheet(syncState),
                 onTapSyncNow: () =>
                     ref.read(syncControllerProvider.notifier).triggerSyncNow(),
+              ),
+              const SizedBox(height: 16),
+
+              // 2. UNITS CONFIGURATION CARD (WEIGHT, DISTANCE, MEASUREMENTS)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.straighten_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Satuan & Unit (Units)',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Atur satuan default aplikasi untuk beban (kg/lbs), jarak (km/miles), dan ukuran tubuh/alat (cm/in). Default: kg, km, dan cm.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Weight Unit (kg / lbs)
+                      Text(
+                        'Weight (Beban)',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<PreferredWeightUnit>(
+                        segments: PreferredWeightUnit.values
+                            .map(
+                              (u) => ButtonSegment<PreferredWeightUnit>(
+                                value: u,
+                                label: Text(u.fullLabel),
+                                icon: const Icon(Icons.fitness_center_rounded),
+                              ),
+                            )
+                            .toList(),
+                        selected: {userPrefs.weightUnit},
+                        onSelectionChanged: (sel) =>
+                            userPrefsNotifier.setWeightUnit(sel.first),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Distance Unit (km / miles)
+                      Text(
+                        'Distance (Jarak)',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<PreferredDistanceUnit>(
+                        segments: PreferredDistanceUnit.values
+                            .map(
+                              (u) => ButtonSegment<PreferredDistanceUnit>(
+                                value: u,
+                                label: Text(u.fullLabel),
+                                icon: const Icon(Icons.route_outlined),
+                              ),
+                            )
+                            .toList(),
+                        selected: {userPrefs.distanceUnit},
+                        onSelectionChanged: (sel) =>
+                            userPrefsNotifier.setDistanceUnit(sel.first),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Measurements Unit (cm / in)
+                      Text(
+                        'Measurements (Ukuran)',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SegmentedButton<PreferredMeasurementUnit>(
+                        segments: PreferredMeasurementUnit.values
+                            .map(
+                              (u) => ButtonSegment<PreferredMeasurementUnit>(
+                                value: u,
+                                label: Text(u.fullLabel),
+                                icon: const Icon(Icons.square_foot_rounded),
+                              ),
+                            )
+                            .toList(),
+                        selected: {userPrefs.measurementUnit},
+                        onSelectionChanged: (sel) =>
+                            userPrefsNotifier.setMeasurementUnit(sel.first),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 3. REST TIMER SOUND & SOUND TYPE CARD
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            userPrefs.restSoundEnabled
+                                ? Icons.volume_up_rounded
+                                : Icons.volume_off_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Suara Alarm Rest Timer',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          if (userPrefs.restSoundEnabled)
+                            FilledButton.tonalIcon(
+                              onPressed: userPrefsNotifier.previewCurrentSound,
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Tes Suara'),
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Bunyikan Suara Saat Rest Selesai'),
+                        subtitle: const Text(
+                          'Memutar efek suara alarm otomatis ketika hitung mundur istirahat mencapai 0:00.',
+                        ),
+                        value: userPrefs.restSoundEnabled,
+                        onChanged: userPrefsNotifier.setRestSoundEnabled,
+                      ),
+                      if (userPrefs.restSoundEnabled) ...[
+                        const Divider(),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Pilih Tipe Suara (Sound Type)',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ...RestSoundType.values.map((soundType) {
+                          final isSelected =
+                              userPrefs.restSoundType == soundType;
+                          final colorScheme = Theme.of(context).colorScheme;
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            elevation: 0,
+                            color: isSelected
+                                ? colorScheme.primaryContainer.withValues(
+                                    alpha: 0.7,
+                                  )
+                                : colorScheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.45),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: isSelected
+                                  ? BorderSide(
+                                      color: colorScheme.primary,
+                                      width: 1.5,
+                                    )
+                                  : BorderSide.none,
+                            ),
+                            child: ListTile(
+                              dense: true,
+                              onTap: () =>
+                                  userPrefsNotifier.setRestSoundType(soundType),
+                              leading: Icon(
+                                isSelected
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_off_rounded,
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                              title: Text(
+                                soundType.label,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(soundType.description),
+                              trailing: IconButton(
+                                tooltip: 'Putar Preview ${soundType.label}',
+                                onPressed: () =>
+                                    RestSoundPlayer.play(soundType),
+                                icon: const Icon(
+                                  Icons.volume_up_outlined,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
 

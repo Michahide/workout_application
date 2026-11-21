@@ -14,6 +14,7 @@ import '../../exercise_library/presentation/exercise_form_sheet.dart';
 import '../../exercise_library/presentation/exercise_library_providers.dart';
 import '../../exercise_library/presentation/exercise_media_gallery.dart';
 import '../../gym_locations/presentation/machine_thumbnail_avatar.dart';
+import '../../settings/data/user_preferences_repository.dart';
 import '../../workout_plans/presentation/workout_plans_providers.dart';
 import '../data/active_workout_repository.dart';
 import '../domain/rest_timer_controller.dart';
@@ -623,7 +624,10 @@ class _ActiveExerciseCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final exercise = bundle.exercise;
     final machine = bundle.selectedMachine;
-    final weightUnit = machine?.weightUnit ?? WeightUnit.KG;
+    final userPrefs = ref.watch(userPreferencesProvider);
+    final weightUnit =
+        machine?.weightUnit ?? userPrefs.weightUnit.toDatabaseWeightUnit();
+    final distanceUnit = userPrefs.distanceUnit;
     final colorScheme = Theme.of(context).colorScheme;
 
     final prevPerfAsync = ref.watch(
@@ -892,7 +896,11 @@ class _ActiveExerciseCard extends ConsumerWidget {
                   Expanded(
                     flex: 4,
                     child: Text(
-                      _inputColumnsHeader(exercise.exerciseType, weightUnit),
+                      _inputColumnsHeader(
+                        exercise.exerciseType,
+                        weightUnit,
+                        distanceUnit,
+                      ),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1015,8 +1023,13 @@ class _ActiveExerciseCard extends ConsumerWidget {
     );
   }
 
-  String _inputColumnsHeader(ExerciseType type, WeightUnit unit) {
+  String _inputColumnsHeader(
+    ExerciseType type,
+    WeightUnit unit,
+    PreferredDistanceUnit distanceUnit,
+  ) {
     final u = unit.label;
+    final dist = distanceUnit.columnHeaderLabel;
     return switch (type) {
       ExerciseType.weight_reps => '$u × REPS',
       ExerciseType.bodyweight_reps => 'BW × REPS',
@@ -1024,8 +1037,8 @@ class _ActiveExerciseCard extends ConsumerWidget {
       ExerciseType.assisted_bodyweight => '-$u × REPS',
       ExerciseType.duration => 'DETIK',
       ExerciseType.duration_weight => '$u × DETIK',
-      ExerciseType.distance_duration => 'METER × DETIK',
-      ExerciseType.weight_distance => '$u × METER',
+      ExerciseType.distance_duration => '$dist × DETIK',
+      ExerciseType.weight_distance => '$u × $dist',
     };
   }
 }
@@ -1815,8 +1828,15 @@ class _QuickMachineSelectorSheetState
     extends ConsumerState<_QuickMachineSelectorSheet> {
   final _brandCtrl = TextEditingController();
   final _pinnedNotesCtrl = TextEditingController();
-  WeightUnit _weightUnit = WeightUnit.KG;
+  late WeightUnit _weightUnit;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _weightUnit =
+        ref.read(userPreferencesProvider).weightUnit.toDatabaseWeightUnit();
+  }
 
   @override
   void dispose() {
